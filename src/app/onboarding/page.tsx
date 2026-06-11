@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { TrendingDown, ArrowRight, ArrowLeft, Sparkles, DollarSign } from 'lucide-react'
+import { ArrowRight, ArrowLeft, Sparkles } from 'lucide-react'
 import { getSupabase } from '@/lib/supabase'
 
 interface QuizData {

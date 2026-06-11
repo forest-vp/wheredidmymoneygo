@@ -34,40 +34,90 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [user] = useState(() => {
-    // Try to read email from localStorage if available
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('wdmg_user_email')
-      if (stored) return { id: 'user', email: stored, plan_type: 'free' }
-    }
-    return { id: 'demo-user', email: 'demo@wdmg.app', plan_type: 'free' }
-  })
+  const [user, setUser] = useState<{ email?: string; id?: string; plan_type?: string } | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
 
   useEffect(() => {
-    // Try to load real user from Supabase (non-blocking)
+    let cancelled = false
+
     const loadUser = async () => {
+      if (!hasSupabase()) {
+        // Demo mode — no Supabase configured
+        const stored = localStorage.getItem('wdmg_demo')
+        if (stored) {
+          setUser({ id: 'demo-user', email: 'demo@wdmg.app', plan_type: 'free' })
+        }
+        setAuthLoading(false)
+        return
+      }
+
+      const supabase = getSupabase()
+      if (!supabase) {
+        setAuthLoading(false)
+        return
+      }
+
+      // Race between Supabase auth and 3-second timeout
+      const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 3000))
+
       try {
-        if (hasSupabase()) {
-          const supabase = getSupabase()
-          if (supabase) {
-            const { data: { user: authUser } } = await supabase.auth.getUser()
-            if (authUser) {
-              localStorage.setItem('wdmg_user_email', authUser.email || '')
-              // We can't set user here because it's a const, but that's OK
-            }
-          }
+        const result = await Promise.race([
+          supabase.auth.getUser(),
+          timeout,
+        ])
+
+        if (cancelled) return
+
+        if (result && 'data' in result && result.data?.user) {
+          const authUser = result.data.user
+          // Fetch profile for plan_type
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('plan_type')
+            .eq('id', authUser.id)
+            .single()
+
+          setUser({
+            id: authUser.id,
+            email: authUser.email,
+            plan_type: profile?.plan_type || 'free',
+          })
         }
       } catch {
-        // Silently fail
+        // Silently fail — user stays null (not logged in)
       }
+
+      if (!cancelled) setAuthLoading(false)
     }
+
     loadUser()
+    return () => { cancelled = true }
   }, [])
 
   const handleLogout = async () => {
+    if (hasSupabase()) {
+      const supabase = getSupabase()
+      if (supabase) {
+        try { await supabase.auth.signOut() } catch { /* ignore */ }
+      }
+    }
     localStorage.removeItem('wdmg_demo')
-    localStorage.removeItem('wdmg_user_email')
+    setUser(null)
     router.push('/login')
+  }
+
+  // Not logged in — redirect to login (but only after auth check completes)
+  if (!authLoading && !user && hasSupabase()) {
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center px-6">
+        <div className="text-center">
+          <p className="text-text-muted mb-4">Please log in to continue</p>
+          <Link href="/login" className="text-primary hover:text-primary-hover font-medium">
+            Go to Login →
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   const userPlan = user?.plan_type || 'free'
@@ -121,7 +171,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <div className="p-3 border-t border-border">
           <div className="px-3 py-2 mb-2">
-            <p className="text-xs text-text-dim truncate">{user?.email || 'demo@wdmg.app'}</p>
+            <p className="text-xs text-text-dim truncate">{authLoading ? '...' : user?.email || 'demo@wdmg.app'}</p>
             <span
               className={`inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full ${
                 userPlan === 'premium'
@@ -150,7 +200,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       <main className="flex-1 min-h-screen overflow-auto">
-        {/* Mobile header */}
         <div className="lg:hidden flex items-center justify-between p-4 border-b border-border">
           <button onClick={() => setSidebarOpen(true)} className="text-text-muted hover:text-text">
             <Menu className="w-6 h-6" />

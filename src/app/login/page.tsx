@@ -20,17 +20,13 @@ export default function LoginPage() {
     setError('')
 
     if (!hasSupabase()) {
-      setError('Supabase is not configured yet. Please set up your environment variables.')
+      setError('Supabase is not configured yet.')
       setLoading(false)
       return
     }
 
     const supabase = getSupabase()
-    if (!supabase) {
-      setError('Unable to connect. Please try again.')
-      setLoading(false)
-      return
-    }
+    if (!supabase) { setError('Unable to connect. Please try again.'); setLoading(false); return }
 
     const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
     if (authError) {
@@ -85,42 +81,26 @@ export default function LoginPage() {
               <label className="block text-sm font-medium text-text-muted mb-2">Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors"
-                  placeholder="you@example.com"
-                  required
-                />
+                  placeholder="you@example.com" required />
               </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-text-muted mb-2">Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
                   className="w-full bg-bg border border-border rounded-xl pl-11 pr-11 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors"
-                  placeholder="••••••••"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text"
-                >
+                  placeholder="••••••••" required />
+                <button type="button" onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text">
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-all hover:shadow-lg hover:shadow-primary/25 flex items-center justify-center gap-2 disabled:opacity-50"
-            >
+            <button type="submit" disabled={loading}
+              className="w-full bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-all hover:shadow-lg hover:shadow-primary/25 flex items-center justify-center gap-2 disabled:opacity-50">
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Sign In'}
               {!loading && <ArrowRight className="w-4 h-4" />}
             </button>
@@ -128,9 +108,7 @@ export default function LoginPage() {
 
           <p className="text-center text-text-muted text-sm mt-6">
             Don&apos;t have an account?{' '}
-            <Link href="/register" className="text-primary hover:text-primary-hover font-medium">
-              Sign up free
-            </Link>
+            <Link href="/register" className="text-primary hover:text-primary-hover font-medium">Sign up free</Link>
           </p>
         </div>
       </div>
