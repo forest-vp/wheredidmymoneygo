@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import {
@@ -32,14 +32,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [user, setUser] = useState<{ email?: string; id?: string } | null>(null)
+  const [user] = useState<{ email?: string; id?: string }>({ id: 'demo-user', email: 'demo@wdmg.app' })
   const [planType, setPlanType] = useState<string>('free')
-
-  useEffect(() => {
-    // Demo mode
-    setUser({ id: 'demo-user', email: 'demo@wdmg.app' })
-    setPlanType('free')
-  }, [])
 
   const handleLogout = () => {
     localStorage.removeItem('wdmg_demo')
