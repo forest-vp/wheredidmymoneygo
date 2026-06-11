@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -10,7 +9,6 @@ import {
   Brain,
   ArrowUpRight,
   Flame,
-  Coffee,
   Target,
 } from 'lucide-react'
 import {
@@ -21,7 +19,7 @@ import {
   getWhatCouldIBuy,
   getMoneyPersonality,
 } from '@/lib/calculations'
-import { MOCK_EXPENSES, MOCK_USER } from '@/lib/mock-data'
+import { getSupabase } from '@/lib/supabase'
 
 interface Expense {
   id: string
@@ -39,18 +37,33 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const loadExpenses = () => {
+    const fetchExpenses = async () => {
+      const supabase = getSupabase()
+      if (supabase) {
+        try {
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            const { data } = await supabase
+              .from('expenses')
+              .select('*')
+              .eq('user_id', user.id)
+              .order('created_at', { ascending: false })
+            if (data) { setExpenses(data); setLoading(false); return }
+          }
+        } catch {
+          // Fall through to localStorage
+        }
+      }
+      // Fallback: localStorage
       const stored = localStorage.getItem('wdmg_expenses')
       if (stored) {
-        setExpenses(MOCK_EXPENSES.concat(JSON.parse(stored)))
-      } else {
-        setExpenses(MOCK_EXPENSES)
+        setExpenses(JSON.parse(stored))
       }
       setLoading(false)
     }
-    loadExpenses()
-    // Refresh when returning from add-expense
-    const handleFocus = () => loadExpenses()
+    fetchExpenses()
+
+    const handleFocus = () => fetchExpenses()
     window.addEventListener('focus', handleFocus)
     return () => window.removeEventListener('focus', handleFocus)
   }, [])
@@ -81,11 +94,8 @@ export default function DashboardPage() {
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       <div>
-        <div className="flex items-center gap-3 mb-1">
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">DEMO</span>
-        </div>
-        <p className="text-text-muted">Your financial overview — using demo data</p>
+        <h1 className="text-3xl font-bold mb-1">Dashboard</h1>
+        <p className="text-text-muted">Your financial overview</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -97,7 +107,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <p className="text-3xl font-bold">€{monthly.toFixed(2)}</p>
-          <p className="text-text-dim text-sm mt-1">This month</p>
+          <p className="text-text-dim text-sm mt-1">{expenses.length} expenses tracked</p>
         </div>
 
         <div className="glass-card rounded-2xl p-6">
@@ -145,26 +155,30 @@ export default function DashboardPage() {
               <p className="text-xs text-text-dim">Based on your spending</p>
             </div>
           </div>
-          <div className="space-y-3">
-            {aiInsights.map((insight, i) => (
-              <div key={i} className="flex items-start gap-2 text-sm text-text-muted">
-                <span className="text-primary mt-0.5">•</span>
-                <span>{insight}</span>
-              </div>
-            ))}
-            <Link href="/ai-coach" className="inline-flex items-center gap-1 text-primary hover:text-primary-hover text-sm font-medium mt-2 transition-colors">
-              Talk to AI Coach
-              <ArrowUpRight className="w-3 h-3" />
-            </Link>
-          </div>
+          {expenses.length === 0 ? (
+            <p className="text-text-muted text-sm text-center py-4">Add expenses to get AI insights</p>
+          ) : (
+            <div className="space-y-3">
+              {aiInsights.map((insight, i) => (
+                <div key={i} className="flex items-start gap-2 text-sm text-text-muted">
+                  <span className="text-primary mt-0.5">•</span>
+                  <span>{insight}</span>
+                </div>
+              ))}
+              <Link href="/ai-coach" className="inline-flex items-center gap-1 text-primary hover:text-primary-hover text-sm font-medium mt-2 transition-colors">
+                Talk to AI Coach <ArrowUpRight className="w-3 h-3" />
+              </Link>
+            </div>
+          )}
         </div>
 
         <div className="glass-card rounded-2xl p-6">
           <h2 className="font-semibold mb-4">Category Breakdown</h2>
-          <div className="space-y-3">
-            {Object.entries(breakdown)
-              .sort((a, b) => b[1] - a[1])
-              .map(([category, amount]) => {
+          {Object.keys(breakdown).length === 0 ? (
+            <p className="text-text-muted text-sm text-center py-4">No data yet</p>
+          ) : (
+            <div className="space-y-3">
+              {Object.entries(breakdown).sort((a, b) => b[1] - a[1]).map(([category, amount]) => {
                 const pct = monthly > 0 ? (amount / monthly) * 100 : 0
                 return (
                   <div key={category}>
@@ -173,40 +187,48 @@ export default function DashboardPage() {
                       <span className="font-medium">€{amount.toFixed(2)}</span>
                     </div>
                     <div className="h-2 bg-bg rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                      <div className="h-full bg-gradient-to-r from-primary to-accent rounded-full" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 )
               })}
-          </div>
+            </div>
+          )}
         </div>
 
         <div className="glass-card rounded-2xl p-6">
           <h2 className="font-semibold mb-4">Money Personality</h2>
-          <div className="text-center py-4">
-            <div className="text-5xl mb-3">{personality.emoji}</div>
-            <h3 className="text-xl font-bold mb-2">{personality.type}</h3>
-            <p className="text-text-muted text-sm leading-relaxed">{personality.description}</p>
-          </div>
+          {expenses.length === 0 ? (
+            <p className="text-text-muted text-sm text-center py-4">Add expenses to discover your type</p>
+          ) : (
+            <div className="text-center py-4">
+              <div className="text-5xl mb-3">{personality.emoji}</div>
+              <h3 className="text-xl font-bold mb-2">{personality.type}</h3>
+              <p className="text-text-muted text-sm leading-relaxed">{personality.description}</p>
+            </div>
+          )}
         </div>
 
         <div className="glass-card rounded-2xl p-6">
           <h2 className="font-semibold mb-4">What Could I Buy Instead?</h2>
-          <div className="space-y-3">
-            {couldBuy.slice(0, 4).map((item) => (
-              <div key={item.item} className="flex items-center justify-between bg-bg rounded-xl p-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{item.emoji}</span>
-                  <span className="text-sm font-medium">{item.item}</span>
+          {couldBuy.length === 0 ? (
+            <p className="text-text-muted text-sm text-center py-4">Add expenses to see comparisons</p>
+          ) : (
+            <div className="space-y-3">
+              {couldBuy.slice(0, 4).map((item) => (
+                <div key={item.item} className="flex items-center justify-between bg-bg rounded-xl p-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{item.emoji}</span>
+                    <span className="text-sm font-medium">{item.item}</span>
+                  </div>
+                  <span className="text-sm text-text-dim">€{item.cost.toLocaleString()}</span>
                 </div>
-                <span className="text-sm text-text-dim">€{item.cost.toLocaleString()}</span>
-              </div>
-            ))}
-            <Link href="/goals" className="inline-flex items-center gap-1 text-accent hover:text-accent-hover text-sm font-medium mt-2 transition-colors">
-              Set a Goal
-              <Target className="w-3 h-3" />
-            </Link>
-          </div>
+              ))}
+              <Link href="/goals" className="inline-flex items-center gap-1 text-accent hover:text-accent-hover text-sm font-medium mt-2 transition-colors">
+                Set a Goal <Target className="w-3 h-3" />
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </div>

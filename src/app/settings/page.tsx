@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -15,6 +14,7 @@ import {
   ArrowLeft,
   Loader2,
 } from 'lucide-react'
+import { getSupabase } from '@/lib/supabase'
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -22,24 +22,49 @@ export default function SettingsPage() {
   const [deleting, setDeleting] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [profile, setProfile] = useState<{ email?: string; plan_type?: string; created_at?: string; country?: string } | null>(null)
 
   useEffect(() => {
-    // Demo mode — skip Supabase
-    setLoading(false)
-  }, [])
-
-  const handleManageSubscription = () => {
-    alert('🔒 Stripe subscription management will be available after connecting your Stripe account.')
-  }
+    const fetchProfile = async () => {
+      try {
+        const supabase = getSupabase()
+        if (!supabase) { setLoading(false); return }
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { router.push('/login'); return }
+        setProfile({
+          email: user.email,
+          plan_type: 'free',
+          created_at: user.created_at,
+        })
+        const { data } = await supabase.from('profiles').select('plan_type, country, created_at').eq('id', user.id).single()
+        if (data) setProfile(prev => ({ ...prev, ...data }))
+      } catch (err) {
+        console.error(err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchProfile()
+  }, [router])
 
   const handleDeleteAccount = async () => {
     if (deleteConfirmText !== 'DELETE') return
     setDeleting(true)
-    // Clear demo data
-    localStorage.removeItem('wdmg_demo')
-    localStorage.removeItem('wdmg_expenses')
-    localStorage.removeItem('wdmg_goals')
-    router.push('/login')
+    try {
+      const supabase = getSupabase()
+      if (!supabase) return
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      await supabase.from('expenses').delete().eq('user_id', user.id)
+      await supabase.from('goals').delete().eq('user_id', user.id)
+      await supabase.from('profiles').delete().eq('id', user.id)
+      await supabase.auth.signOut()
+      router.push('/login')
+    } catch {
+      setError('Failed to delete account.')
+      setDeleting(false)
+    }
   }
 
   return (
@@ -53,16 +78,6 @@ export default function SettingsPage() {
         <p className="text-text-muted">Manage your account and preferences</p>
       </div>
 
-      {/* Demo Banner */}
-      <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 flex items-center gap-3">
-        <span className="text-2xl">🚀</span>
-        <div>
-          <p className="text-primary font-medium text-sm">Demo Mode</p>
-          <p className="text-text-muted text-xs">Connect Supabase & Stripe to enable all features</p>
-        </div>
-      </div>
-
-      {/* Account Info */}
       <div className="glass-card rounded-2xl p-6">
         <h2 className="font-semibold mb-4 flex items-center gap-2">
           <User className="w-5 h-5 text-primary" />
@@ -73,20 +88,19 @@ export default function SettingsPage() {
             <Mail className="w-4 h-4 text-text-dim" />
             <div>
               <p className="text-xs text-text-dim">Email</p>
-              <p className="text-sm font-medium">demo@wdmg.app</p>
+              <p className="text-sm font-medium">{loading ? '...' : profile?.email || '—'}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <Calendar className="w-4 h-4 text-text-dim" />
             <div>
               <p className="text-xs text-text-dim">Member since</p>
-              <p className="text-sm font-medium">January 2025</p>
+              <p className="text-sm font-medium">{profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long' }) : '—'}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Plan */}
       <div className="glass-card rounded-2xl p-6">
         <h2 className="font-semibold mb-4 flex items-center gap-2">
           <CreditCard className="w-5 h-5 text-primary" />
@@ -96,11 +110,13 @@ export default function SettingsPage() {
           <div className="flex items-center gap-3">
             <Shield className="w-5 h-5 text-text-dim" />
             <div>
-              <p className="text-sm font-medium">Free Plan</p>
+              <p className="text-sm font-medium capitalize">{loading ? '...' : profile?.plan_type || 'Free'} Plan</p>
               <p className="text-xs text-text-dim">Basic expense tracking</p>
             </div>
           </div>
-          <span className="text-xs font-medium px-3 py-1 rounded-full bg-border text-text-dim">Free</span>
+          <span className="text-xs font-medium px-3 py-1 rounded-full bg-border text-text-dim capitalize">
+            {loading ? '...' : profile?.plan_type || 'Free'}
+          </span>
         </div>
         <div className="mt-4 pt-4 border-t border-border">
           <Link href="/pricing" className="text-primary hover:text-primary-hover text-sm font-medium transition-colors">
@@ -109,7 +125,6 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Danger Zone */}
       <div className="glass-card rounded-2xl p-6 border-danger/20">
         <h2 className="font-semibold mb-4 flex items-center gap-2 text-danger">
           <AlertTriangle className="w-5 h-5" />
@@ -125,7 +140,6 @@ export default function SettingsPage() {
         </button>
       </div>
 
-      {/* Delete Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6">
           <div className="glass-card rounded-2xl p-6 max-w-md w-full border-danger/20">
@@ -146,17 +160,12 @@ export default function SettingsPage() {
               className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-text placeholder:text-text-dim focus:outline-none focus:border-danger transition-colors mb-4"
             />
             <div className="flex gap-3">
-              <button
-                onClick={() => { setShowDeleteModal(false); setDeleteConfirmText('') }}
-                className="flex-1 bg-border hover:bg-border-light text-text py-2.5 rounded-xl text-sm font-medium transition-all"
-              >
+              <button onClick={() => { setShowDeleteModal(false); setDeleteConfirmText('') }}
+                className="flex-1 bg-border hover:bg-border-light text-text py-2.5 rounded-xl text-sm font-medium transition-all">
                 Cancel
               </button>
-              <button
-                onClick={handleDeleteAccount}
-                disabled={deleteConfirmText !== 'DELETE' || deleting}
-                className="flex-1 bg-danger hover:bg-danger-hover disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2"
-              >
+              <button onClick={handleDeleteAccount} disabled={deleteConfirmText !== 'DELETE' || deleting}
+                className="flex-1 bg-danger hover:bg-danger-hover disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2">
                 {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                 Delete
               </button>

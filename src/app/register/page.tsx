@@ -3,39 +3,81 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { TrendingDown, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react'
+import { TrendingDown, Mail, Lock, Eye, EyeOff, ArrowRight, Loader2, User, Calendar, Globe } from 'lucide-react'
+import { getSupabase, hasSupabase } from '@/lib/supabase'
 
 export default function RegisterPage() {
   const router = useRouter()
+  const [step, setStep] = useState(1)
+  const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
+  const [birthDate, setBirthDate] = useState('')
+  const [country, setCountry] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+  const handleNext = () => {
     setError('')
-    if (password !== confirmPassword) {
-      setError('Passwords do not match')
-      setLoading(false)
-      return
+    if (step === 1) {
+      if (!fullName.trim()) { setError('Please enter your full name'); return }
+      if (!email.trim() || !email.includes('@')) { setError('Please enter a valid email'); return }
+      setStep(2)
+    } else if (step === 2) {
+      if (!birthDate) { setError('Please enter your birth date'); return }
+      if (!country) { setError('Please select your country'); return }
+      setStep(3)
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters')
-      setLoading(false)
-      return
-    }
-    localStorage.setItem('wdmg_demo', 'true')
-    router.push('/dashboard')
   }
 
-  const handleDemoLogin = () => {
-    localStorage.setItem('wdmg_demo', 'true')
-    router.push('/dashboard')
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+
+    if (password !== confirmPassword) { setError('Passwords do not match'); return }
+    if (password.length < 8) { setError('Password must be at least 8 characters'); return }
+
+    setLoading(true)
+
+    if (!hasSupabase()) {
+      setError('Supabase is not configured yet. Please set up your environment variables.')
+      setLoading(false)
+      return
+    }
+
+    const supabase = getSupabase()
+    if (!supabase) { setError('Unable to connect. Please try again.'); setLoading(false); return }
+
+    const { error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: fullName },
+      },
+    })
+
+    if (signUpError) {
+      setError(signUpError.message)
+      setLoading(false)
+      return
+    }
+
+    // Update profile with extra info
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      await supabase.from('profiles').update({
+        full_name: fullName,
+        birth_date: birthDate,
+        country,
+      }).eq('id', user.id)
+    }
+
+    router.push('/onboarding')
   }
+
+  const COUNTRIES = ['Albania', 'Argentina', 'Australia', 'Austria', 'Belgium', 'Brazil', 'Bulgaria', 'Canada', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Egypt', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'India', 'Indonesia', 'Ireland', 'Italy', 'Japan', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Mexico', 'Netherlands', 'Norway', 'Poland', 'Portugal', 'Romania', 'Serbia', 'Singapore', 'Slovakia', 'Slovenia', 'South Africa', 'South Korea', 'Spain', 'Sweden', 'Switzerland', 'Thailand', 'Turkey', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'United States', 'Vietnam'].sort()
 
   return (
     <div className="min-h-screen bg-bg flex items-center justify-center px-6">
@@ -52,90 +94,126 @@ export default function RegisterPage() {
             <span className="text-2xl font-bold">WDMG</span>
           </Link>
           <h1 className="text-2xl font-bold mb-2">Create your account</h1>
-          <p className="text-text-muted">Start tracking your money for free</p>
+          <p className="text-text-muted">Step {step} of 3 — Your personal info</p>
+          <div className="flex gap-2 justify-center mt-4">
+            {[1, 2, 3].map(s => (
+              <div key={s} className={`h-2 rounded-full transition-all ${s <= step ? 'w-8 bg-primary' : 'w-2 bg-border'}`} />
+            ))}
+          </div>
         </div>
 
         <div className="glass-card rounded-2xl p-8">
-          <form onSubmit={handleRegister} className="space-y-5">
-            {error && (
-              <div className="bg-danger/10 border border-danger/20 rounded-xl p-3 text-danger text-sm">
-                {error}
-              </div>
-            )}
-            <div>
-              <label className="block text-sm font-medium text-text-muted mb-2">Email</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors"
-                  placeholder="you@example.com"
-                />
-              </div>
+          {error && (
+            <div className="bg-danger/10 border border-danger/20 rounded-xl p-3 text-danger text-sm mb-5">
+              {error}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-text-muted mb-2">Password</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-bg border border-border rounded-xl pl-11 pr-11 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors"
-                  placeholder="Min 6 characters"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+          )}
+
+          {step === 1 && (
+            <div className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-text-muted mb-2">Full Name</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
+                  <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)}
+                    className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors"
+                    placeholder="John Doe" required />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-muted mb-2">Email Address</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                    className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors"
+                    placeholder="you@example.com" required />
+                </div>
+              </div>
+              <button type="button" onClick={handleNext}
+                className="w-full bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2">
+                Continue <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-text-muted mb-2">Birth Date</label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
+                  <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)}
+                    className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text focus:outline-none focus:border-primary transition-colors" required />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-muted mb-2">Country</label>
+                <div className="relative">
+                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
+                  <select value={country} onChange={(e) => setCountry(e.target.value)}
+                    className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text appearance-none focus:outline-none focus:border-primary transition-colors cursor-pointer" required>
+                    <option value="">Select your country</option>
+                    {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setStep(1)}
+                  className="px-6 border border-border text-text-muted hover:text-text py-3 rounded-xl font-medium transition-all">
+                  Back
+                </button>
+                <button type="button" onClick={handleNext}
+                  className="flex-1 bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2">
+                  Continue <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-text-muted mb-2">Confirm Password</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors"
-                  placeholder="Repeat password"
-                />
+          )}
+
+          {step === 3 && (
+            <form onSubmit={handleRegister} className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-text-muted mb-2">Password (min 8 characters)</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
+                  <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-bg border border-border rounded-xl pl-11 pr-11 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors"
+                    placeholder="Min 8 characters" required minLength={8} />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text">
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
               </div>
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-all hover:shadow-lg hover:shadow-primary/25 flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              Create Account
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </form>
-
-          <div className="my-6 flex items-center gap-3">
-            <div className="flex-1 h-px bg-border" />
-            <span className="text-text-dim text-sm">or</span>
-            <div className="flex-1 h-px bg-border" />
-          </div>
-
-          <button
-            onClick={handleDemoLogin}
-            className="w-full bg-accent/10 hover:bg-accent/20 text-accent border border-accent/20 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2"
-          >
-            🚀 Try Demo — No Account Needed
-          </button>
+              <div>
+                <label className="block text-sm font-medium text-text-muted mb-2">Confirm Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
+                  <input type={showPassword ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors"
+                    placeholder="Repeat password" required minLength={8} />
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setStep(2)} disabled={loading}
+                  className="px-6 border border-border text-text-muted hover:text-text py-3 rounded-xl font-medium transition-all disabled:opacity-50">
+                  Back
+                </button>
+                <button type="submit" disabled={loading}
+                  className="flex-1 bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Create Account'}
+                  {!loading && <ArrowRight className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-xs text-text-dim text-center">
+                By signing up, you agree to our Terms of Service and Privacy Policy.
+              </p>
+            </form>
+          )}
 
           <p className="text-center text-text-muted text-sm mt-6">
             Already have an account?{' '}
-            <Link href="/login" className="text-primary hover:text-primary-hover font-medium">
-              Sign in
-            </Link>
+            <Link href="/login" className="text-primary hover:text-primary-hover font-medium">Sign in</Link>
           </p>
         </div>
       </div>

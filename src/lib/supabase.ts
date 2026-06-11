@@ -18,20 +18,21 @@ export function getSupabase(): SupabaseClient | null {
   }
 }
 
-// Check if supabase is configured
 export function hasSupabase(): boolean {
   return !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
 }
 
-// Database types
 export interface User {
   id: string
   email: string
   plan_type: 'free' | 'pro' | 'premium'
   is_premium: boolean
-  stripe_customer_id: string | null
-  stripe_subscription_id: string | null
-  subscription_status: string | null
+  full_name?: string
+  birth_date?: string
+  country?: string
+  monthly_salary?: number
+  onboarding_complete?: boolean
+  onboarding_data?: Record<string, unknown>
   created_at: string
 }
 
@@ -43,6 +44,7 @@ export interface Expense {
   amount: number
   frequency: string
   date: string
+  is_estimated?: boolean
   created_at: string
 }
 
