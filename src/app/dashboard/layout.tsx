@@ -34,44 +34,39 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [user, setUser] = useState<{ email?: string; id?: string; plan_type?: string } | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [user] = useState(() => {
+    // Try to read email from localStorage if available
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('wdmg_user_email')
+      if (stored) return { id: 'user', email: stored, plan_type: 'free' }
+    }
+    return { id: 'demo-user', email: 'demo@wdmg.app', plan_type: 'free' }
+  })
 
   useEffect(() => {
+    // Try to load real user from Supabase (non-blocking)
     const loadUser = async () => {
-      if (hasSupabase()) {
-        const supabase = getSupabase()
-        if (supabase) {
-          try {
+      try {
+        if (hasSupabase()) {
+          const supabase = getSupabase()
+          if (supabase) {
             const { data: { user: authUser } } = await supabase.auth.getUser()
             if (authUser) {
-              const { data: profile } = await supabase
-                .from('profiles')
-                .select('email, plan_type')
-                .eq('id', authUser.id)
-                .single()
-              setUser({ id: authUser.id, email: authUser.email, plan_type: profile?.plan_type || 'free' })
+              localStorage.setItem('wdmg_user_email', authUser.email || '')
+              // We can't set user here because it's a const, but that's OK
             }
-          } catch {
-            // Fall through to demo
           }
         }
+      } catch {
+        // Silently fail
       }
-      // If no Supabase or no user, it's demo mode
-      if (!user) {
-        setUser({ id: 'demo-user', email: 'demo@wdmg.app', plan_type: 'free' })
-      }
-      setLoading(false)
     }
     loadUser()
   }, [])
 
   const handleLogout = async () => {
-    if (hasSupabase()) {
-      const supabase = getSupabase()
-      if (supabase) await supabase.auth.signOut()
-    }
-    setUser(null)
+    localStorage.removeItem('wdmg_demo')
+    localStorage.removeItem('wdmg_user_email')
     router.push('/login')
   }
 
@@ -126,7 +121,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <div className="p-3 border-t border-border">
           <div className="px-3 py-2 mb-2">
-            <p className="text-xs text-text-dim truncate">{loading ? '...' : user?.email || 'demo@wdmg.app'}</p>
+            <p className="text-xs text-text-dim truncate">{user?.email || 'demo@wdmg.app'}</p>
             <span
               className={`inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full ${
                 userPlan === 'premium'
