@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0B0F1A;
+  --color-bg-card: #111827;
+  --color-bg-card-hover: #1a2332;
+  --color-bg-sidebar: #0D1220;
+  --color-primary: #4F8CFF;
+  --color-primary-hover: #3B7AE0;
+  --color-accent: #00E5A8;
+  --color-accent-hover: #00CC99;
+  --color-danger: #FF4D4D;
+  --color-danger-hover: #E63E3E;
+  --color-warning: #F59E0B;
+  --color-text: #E6EAF2;
+  --color-text-muted: #8892A8;
+  --color-text-dim: #5A6580;
+  --color-border: #1E293B;
+  --color-border-light: #2A3650;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+body {
+  background-color: #0B0F1A;
+  color: #E6EAF2;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0B0F1A;
+}
+::-webkit-scrollbar-thumb {
+  background: #2A3650;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4F8CFF;
+}
+
+/* Smooth transitions */
+* {
+  transition-property: background-color, border-color, color, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: ease-in-out;
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #4F8CFF, #00E5A8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glass card effect */
+.glass-card {
+  background: rgba(17, 24, 39, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(30, 41, 59, 0.5);
+}
+
+/* Floating animation */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.float-animation {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Pulse glow */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(79, 140, 255, 0.3); }
+  50% { box-shadow: 0 0 40px rgba(79, 140, 255, 0.6); }
+}
+
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Hero gradient */
+.hero-gradient {
+  background: radial-gradient(ellipse at 50% 0%, rgba(79, 140, 255, 0.15) 0%, transparent 60%);
+}
+
+/* Section gradient */
+.section-gradient {
+  background: radial-gradient(ellipse at 50% 50%, rgba(0, 229, 168, 0.05) 0%, transparent 70%);
+}
