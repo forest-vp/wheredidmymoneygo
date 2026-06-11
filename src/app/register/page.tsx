@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { TrendingDown, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -32,7 +32,7 @@ export default function RegisterPage() {
       return
     }
 
-    const { error } = await supabase.auth.signUp({ email, password })
+    const { error } = await getSupabase().auth.signUp({ email, password })
     if (error) {
       setError(error.message)
       setLoading(false)

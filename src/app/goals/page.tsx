@@ -11,7 +11,7 @@ import {
   AlertCircle,
   X,
 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 
 interface Goal {
   id: string
@@ -75,7 +75,7 @@ export default function GoalsPage() {
   async function fetchGoals() {
     const {
       data: { user },
-    } = await supabase.auth.getUser()
+    } = await getSupabase().auth.getUser()
     if (!user) {
       setLoading(false)
       return
@@ -97,7 +97,7 @@ export default function GoalsPage() {
 
     const {
       data: { user },
-    } = await supabase.auth.getUser()
+    } = await getSupabase().auth.getUser()
     if (!user) return
 
     setSaving(true)
@@ -146,7 +146,7 @@ export default function GoalsPage() {
   }
 
   async function handleDeleteGoal(goalId: string) {
-    const { error } = await supabase.from('goals').delete().eq('id', goalId)
+    const { error } = await getSupabase().from('goals').delete().eq('id', goalId)
     if (!error) {
       setGoals((prev) => prev.filter((g) => g.id !== goalId))
     }

@@ -12,7 +12,7 @@ import {
   ArrowRight,
   Sparkles,
 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import { loadStripe } from '@stripe/stripe-js'
 
 const stripePromise = loadStripe(
@@ -92,7 +92,7 @@ export default function PricingPage() {
 
       const {
         data: { user },
-      } = await supabase.auth.getUser()
+      } = await getSupabase().auth.getUser()
 
       if (!user) {
         window.location.href = '/register'

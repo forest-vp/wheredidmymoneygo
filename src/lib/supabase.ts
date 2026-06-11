@@ -1,18 +1,20 @@
+'use client'
+
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
 let supabaseInstance: SupabaseClient | null = null
 
 export function getSupabase(): SupabaseClient {
   if (!supabaseInstance) {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
-    supabaseInstance = createClient(url, key)
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+    if (!url || !key) {
+      console.warn('Supabase env vars not set - some features may not work')
+    }
+    supabaseInstance = createClient(url || 'https://placeholder.supabase.co', key || 'placeholder-key')
   }
   return supabaseInstance
 }
-
-// Default export for backward compatibility
-export const supabase = getSupabase()
 
 // Database types
 export interface User {

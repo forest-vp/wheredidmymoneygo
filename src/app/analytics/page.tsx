@@ -20,7 +20,7 @@ import {
   Legend,
 } from 'recharts'
 import { BarChart3, PieChart as PieChartIcon, TrendingUp, Award } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import {
   getCategoryBreakdown,
   getMonthlyTrend,
@@ -38,7 +38,7 @@ export default function AnalyticsPage() {
     const fetchExpenses = async () => {
       const {
         data: { user },
-      } = await supabase.auth.getUser()
+      } = await getSupabase().auth.getUser()
       if (!user) {
         setLoading(false)
         return

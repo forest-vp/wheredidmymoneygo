@@ -13,7 +13,7 @@ import {
   Coffee,
   Target,
 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import {
   getMonthlyTotal,
   getYearlyProjection,
@@ -42,7 +42,7 @@ export default function DashboardPage() {
     const fetchExpenses = async () => {
       const {
         data: { user },
-      } = await supabase.auth.getUser()
+      } = await getSupabase().auth.getUser()
       if (!user) return
 
       const { data } = await supabase

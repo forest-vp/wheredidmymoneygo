@@ -25,7 +25,7 @@ import {
   Heart,
   Shield,
 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import {
   getYearlyProjection,
   getLifetimeProjection,
@@ -93,7 +93,7 @@ export default function AICoachPage() {
     const fetchExpenses = async () => {
       const {
         data: { user },
-      } = await supabase.auth.getUser()
+      } = await getSupabase().auth.getUser()
       if (!user) {
         setLoading(false)
         return

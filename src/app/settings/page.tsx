@@ -18,7 +18,7 @@ import {
   XCircle,
   Clock,
 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 
 interface Profile {
   id: string
@@ -73,7 +73,7 @@ export default function SettingsPage() {
     try {
       const {
         data: { user },
-      } = await supabase.auth.getUser()
+      } = await getSupabase().auth.getUser()
 
       if (!user) {
         router.push('/login')
@@ -102,7 +102,7 @@ export default function SettingsPage() {
 
   const handleManageSubscription = async () => {
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('create-portal-session', {
+      const { data, error: fnError } = await getSupabase().functions.invoke('create-portal-session', {
         body: {
           return_url: `${window.location.origin}/settings`,
         },
@@ -130,7 +130,7 @@ export default function SettingsPage() {
     try {
       const {
         data: { user },
-      } = await supabase.auth.getUser()
+      } = await getSupabase().auth.getUser()
 
       if (!user) {
         router.push('/login')
@@ -138,13 +138,13 @@ export default function SettingsPage() {
       }
 
       // Delete user data first
-      await supabase.from('expenses').delete().eq('user_id', user.id)
-      await supabase.from('goals').delete().eq('user_id', user.id)
-      await supabase.from('ai_reports').delete().eq('user_id', user.id)
-      await supabase.from('profiles').delete().eq('id', user.id)
+      await getSupabase().from('expenses').delete().eq('user_id', user.id)
+      await getSupabase().from('goals').delete().eq('user_id', user.id)
+      await getSupabase().from('ai_reports').delete().eq('user_id', user.id)
+      await getSupabase().from('profiles').delete().eq('id', user.id)
 
       // Sign out (auth user deletion requires server-side admin call)
-      await supabase.auth.signOut()
+      await getSupabase().auth.signOut()
       router.push('/login')
     } catch (err) {
       console.error('Error deleting account:', err)

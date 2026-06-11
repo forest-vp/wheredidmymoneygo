@@ -2,7 +2,7 @@
 'use client'
 
 import { useState, useEffect, FormEvent } from 'react'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import type { Expense } from '@/lib/supabase'
 import {
   PlusCircle,
@@ -58,7 +58,7 @@ export default function AddExpensePage() {
     setLoadingExpenses(true)
     const {
       data: { user },
-    } = await supabase.auth.getUser()
+    } = await getSupabase().auth.getUser()
     if (!user) {
       setLoadingExpenses(false)
       return
@@ -107,7 +107,7 @@ export default function AddExpensePage() {
     try {
       const {
         data: { user },
-      } = await supabase.auth.getUser()
+      } = await getSupabase().auth.getUser()
 
       if (!user) {
         setStatus({ type: 'error', text: 'You must be logged in to add an expense.' })
@@ -115,7 +115,7 @@ export default function AddExpensePage() {
         return
       }
 
-      const { error } = await supabase.from('expenses').insert({
+      const { error } = await getSupabase().from('expenses').insert({
         user_id: user.id,
         name: name.trim(),
         category,
@@ -140,7 +140,7 @@ export default function AddExpensePage() {
   const handleDelete = async (id: string) => {
     setDeletingId(id)
     try {
-      const { error } = await supabase.from('expenses').delete().eq('id', id)
+      const { error } = await getSupabase().from('expenses').delete().eq('id', id)
       if (error) throw error
       await fetchRecentExpenses()
     } catch {

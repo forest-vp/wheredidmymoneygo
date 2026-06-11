@@ -17,7 +17,7 @@ import {
   X,
   ChevronRight,
 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -35,28 +35,41 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [user, setUser] = useState<{ email?: string; id?: string } | null>(null)
   const [planType, setPlanType] = useState<string>('free')
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      setUser(user)
+      try {
+        const supabase = getSupabase()
+        const {
+          data: { user },
+        } = await getSupabase().auth.getUser()
+        setUser(user)
 
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('plan_type')
-          .eq('id', user.id)
-          .single()
-        if (profile) setPlanType(profile.plan_type || 'free')
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('plan_type')
+            .eq('id', user.id)
+            .single()
+          if (profile) setPlanType(profile.plan_type || 'free')
+        }
+      } catch (err) {
+        console.error('Auth error:', err)
+      } finally {
+        setLoading(false)
       }
     }
     getUser()
   }, [])
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    try {
+      const supabase = getSupabase()
+      await getSupabase().auth.signOut()
+    } catch (err) {
+      console.error('Logout error:', err)
+    }
     router.push('/login')
   }
 
@@ -115,7 +128,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <div className="p-3 border-t border-border">
           <div className="px-3 py-2 mb-2">
-            <p className="text-xs text-text-dim truncate">{user?.email}</p>
+            <p className="text-xs text-text-dim truncate">{loading ? 'Loading...' : user?.email || 'Not logged in'}</p>
             <span
               className={`inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full ${
                 planType === 'premium'
