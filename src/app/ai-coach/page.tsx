@@ -25,7 +25,8 @@ import {
   Heart,
   Shield,
 } from 'lucide-react'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, hasSupabase } from '@/lib/supabase'
+import { MOCK_EXPENSES } from '@/lib/mock-data'
 import {
   getYearlyProjection,
   getLifetimeProjection,
@@ -91,20 +92,18 @@ export default function AICoachPage() {
   // Fetch expenses
   useEffect(() => {
     const fetchExpenses = async () => {
-      const {
-        data: { user },
-      } = await getSupabase().auth.getUser()
-      if (!user) {
+      if (!hasSupabase()) {
+        const stored = localStorage.getItem('wdmg_expenses')
+        const localExpenses = stored ? JSON.parse(stored) : []
+        setExpenses([...MOCK_EXPENSES, ...localExpenses])
         setLoading(false)
         return
       }
-
-      const { data } = await supabase
-        .from('expenses')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-
+      const supabase = getSupabase()
+      if (!supabase) { setLoading(false); return }
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setLoading(false); return }
+      const { data } = await supabase.from('expenses').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
       if (data) setExpenses(data)
       setLoading(false)
     }

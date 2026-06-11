@@ -20,7 +20,7 @@ import {
   Legend,
 } from 'recharts'
 import { BarChart3, PieChart as PieChartIcon, TrendingUp, Award } from 'lucide-react'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, hasSupabase } from '@/lib/supabase'
 import {
   getCategoryBreakdown,
   getMonthlyTrend,
@@ -30,15 +30,40 @@ import {
 
 const PIE_COLORS = ['#4F8CFF', '#00E5A8', '#FF4D4D', '#F59E0B', '#8B5CF6', '#EC4899']
 
+const MOCK_EXPENSES = [
+  { id: '1', user_id: 'demo-user', name: 'Coffee', category: 'food', amount: 3.50, frequency: 'daily', date: '2025-01-15', created_at: '2025-01-15' },
+  { id: '2', user_id: 'demo-user', name: 'Netflix', category: 'subscriptions', amount: 15.99, frequency: 'monthly', date: '2025-01-01', created_at: '2025-01-01' },
+  { id: '3', user_id: 'demo-user', name: 'Cigarettes', category: 'habits', amount: 8.00, frequency: 'daily', date: '2025-01-14', created_at: '2025-01-14' },
+  { id: '4', user_id: 'demo-user', name: 'Uber', category: 'transport', amount: 12.50, frequency: 'weekly', date: '2025-01-13', created_at: '2025-01-13' },
+  { id: '5', user_id: 'demo-user', name: 'Amazon Shopping', category: 'shopping', amount: 45.00, frequency: 'monthly', date: '2025-01-10', created_at: '2025-01-10' },
+  { id: '6', user_id: 'demo-user', name: 'Gym', category: 'health', amount: 30.00, frequency: 'monthly', date: '2025-01-05', created_at: '2025-01-05' },
+  { id: '7', user_id: 'demo-user', name: 'Fast Food', category: 'food', amount: 9.50, frequency: 'weekly', date: '2025-01-12', created_at: '2025-01-12' },
+  { id: '8', user_id: 'demo-user', name: 'Spotify', category: 'subscriptions', amount: 9.99, frequency: 'monthly', date: '2025-01-01', created_at: '2025-01-01' },
+]
+
 export default function AnalyticsPage() {
   const [expenses, setExpenses] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchExpenses = async () => {
+      if (!hasSupabase()) {
+        const stored = localStorage.getItem('wdmg_expenses')
+        const localExpenses = stored ? JSON.parse(stored) : []
+        setExpenses([...MOCK_EXPENSES, ...localExpenses])
+        setLoading(false)
+        return
+      }
+
+      const supabase = getSupabase()
+      if (!supabase) {
+        setLoading(false)
+        return
+      }
+
       const {
         data: { user },
-      } = await getSupabase().auth.getUser()
+      } = await supabase.auth.getUser()
       if (!user) {
         setLoading(false)
         return

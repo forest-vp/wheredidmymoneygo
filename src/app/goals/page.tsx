@@ -11,7 +11,7 @@ import {
   AlertCircle,
   X,
 } from 'lucide-react'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, hasSupabase } from '@/lib/supabase'
 
 interface Goal {
   id: string
@@ -23,12 +23,17 @@ interface Goal {
   created_at: string
 }
 
+const MOCK_GOALS: Goal[] = [
+  { id: '1', user_id: 'demo-user', name: 'New iPhone', target_amount: 1200, current_amount: 350, deadline: '2025-12-31', created_at: '2025-01-01' },
+  { id: '2', user_id: 'demo-user', name: 'Vacation', target_amount: 2000, current_amount: 800, deadline: '2025-08-31', created_at: '2025-01-01' },
+]
+
 function getMonthsRemaining(deadline: string): number {
   const now = new Date()
   const end = new Date(deadline)
   const diffMs = end.getTime() - now.getTime()
   const diffDays = diffMs / (1000 * 60 * 60 * 24)
-  return Math.max(diffDays / 30.44, 0.1) // avoid division by zero
+  return Math.max(diffDays / 30.44, 0.1)
 }
 
 function getProgress(current: number, target: number): number {
@@ -73,9 +78,24 @@ export default function GoalsPage() {
   }, [])
 
   async function fetchGoals() {
+    if (!hasSupabase()) {
+      // Load mock + localStorage goals
+      const stored = localStorage.getItem('wdmg_goals')
+      const localGoals: Goal[] = stored ? JSON.parse(stored) : []
+      setGoals([...MOCK_GOALS, ...localGoals])
+      setLoading(false)
+      return
+    }
+
+    const supabase = getSupabase()
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
+
     const {
       data: { user },
-    } = await getSupabase().auth.getUser()
+    } = await supabase.auth.getUser()
     if (!user) {
       setLoading(false)
       return
@@ -95,12 +115,43 @@ export default function GoalsPage() {
     e.preventDefault()
     if (!name || !targetAmount || !deadline) return
 
+    setSaving(true)
+
+    if (!hasSupabase()) {
+      // Save to localStorage
+      const stored = localStorage.getItem('wdmg_goals')
+      const localGoals: Goal[] = stored ? JSON.parse(stored) : []
+      const newGoal: Goal = {
+        id: Date.now().toString(),
+        user_id: 'demo-user',
+        name,
+        target_amount: parseFloat(targetAmount),
+        current_amount: 0,
+        deadline,
+        created_at: new Date().toISOString(),
+      }
+      localGoals.unshift(newGoal)
+      localStorage.setItem('wdmg_goals', JSON.stringify(localGoals))
+      setGoals((prev) => [newGoal, ...prev])
+      setName('')
+      setTargetAmount('')
+      setDeadline('')
+      setShowForm(false)
+      setSaving(false)
+      return
+    }
+
+    const supabase = getSupabase()
+    if (!supabase) {
+      setSaving(false)
+      return
+    }
+
     const {
       data: { user },
-    } = await getSupabase().auth.getUser()
-    if (!user) return
+    } = await supabase.auth.getUser()
+    if (!user) { setSaving(false); return }
 
-    setSaving(true)
     const { data, error } = await supabase
       .from('goals')
       .insert({
@@ -131,6 +182,24 @@ export default function GoalsPage() {
     if (!goal) return
 
     const newAmount = goal.current_amount + amount
+
+    if (!hasSupabase()) {
+      // Update localStorage
+      const stored = localStorage.getItem('wdmg_goals')
+      const localGoals: Goal[] = stored ? JSON.parse(stored) : []
+      const updated = localGoals.map((g) => g.id === goalId ? { ...g, current_amount: newAmount } : g)
+      localStorage.setItem('wdmg_goals', JSON.stringify(updated))
+      setGoals((prev) =>
+        prev.map((g) => (g.id === goalId ? { ...g, current_amount: newAmount } : g))
+      )
+      setDepositGoalId(null)
+      setDepositAmount('')
+      return
+    }
+
+    const supabase = getSupabase()
+    if (!supabase) return
+
     const { error } = await supabase
       .from('goals')
       .update({ current_amount: newAmount })
@@ -146,7 +215,20 @@ export default function GoalsPage() {
   }
 
   async function handleDeleteGoal(goalId: string) {
-    const { error } = await getSupabase().from('goals').delete().eq('id', goalId)
+    if (!hasSupabase()) {
+      // Delete from localStorage
+      const stored = localStorage.getItem('wdmg_goals')
+      const localGoals: Goal[] = stored ? JSON.parse(stored) : []
+      const filtered = localGoals.filter((g) => g.id !== goalId)
+      localStorage.setItem('wdmg_goals', JSON.stringify(filtered))
+      setGoals((prev) => prev.filter((g) => g.id !== goalId))
+      return
+    }
+
+    const supabase = getSupabase()
+    if (!supabase) return
+
+    const { error } = await supabase.from('goals').delete().eq('id', goalId)
     if (!error) {
       setGoals((prev) => prev.filter((g) => g.id !== goalId))
     }
@@ -270,8 +352,6 @@ export default function GoalsPage() {
             const isPastDeadline = new Date(goal.deadline) < new Date() && !isComplete
             const remaining = Math.max(goal.target_amount - goal.current_amount, 0)
 
-            // On-track logic: if user has been saving at a rate >= required monthly
-            // We estimate monthly rate from creation date to now
             const createdAt = new Date(goal.created_at)
             const now = new Date()
             const monthsSinceCreation = Math.max(

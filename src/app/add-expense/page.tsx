@@ -2,7 +2,7 @@
 'use client'
 
 import { useState, useEffect, FormEvent } from 'react'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, hasSupabase } from '@/lib/supabase'
 import type { Expense } from '@/lib/supabase'
 import {
   PlusCircle,
@@ -35,6 +35,17 @@ const FREQUENCIES = [
   { value: 'monthly', label: 'Monthly' },
 ] as const
 
+const MOCK_EXPENSES: Expense[] = [
+  { id: '1', user_id: 'demo-user', name: 'Coffee', category: 'food', amount: 3.50, frequency: 'daily', date: '2025-01-15', created_at: '2025-01-15' },
+  { id: '2', user_id: 'demo-user', name: 'Netflix', category: 'subscriptions', amount: 15.99, frequency: 'monthly', date: '2025-01-01', created_at: '2025-01-01' },
+  { id: '3', user_id: 'demo-user', name: 'Cigarettes', category: 'habits', amount: 8.00, frequency: 'daily', date: '2025-01-14', created_at: '2025-01-14' },
+  { id: '4', user_id: 'demo-user', name: 'Uber', category: 'transport', amount: 12.50, frequency: 'weekly', date: '2025-01-13', created_at: '2025-01-13' },
+  { id: '5', user_id: 'demo-user', name: 'Amazon Shopping', category: 'shopping', amount: 45.00, frequency: 'monthly', date: '2025-01-10', created_at: '2025-01-10' },
+  { id: '6', user_id: 'demo-user', name: 'Gym', category: 'health', amount: 30.00, frequency: 'monthly', date: '2025-01-05', created_at: '2025-01-05' },
+  { id: '7', user_id: 'demo-user', name: 'Fast Food', category: 'food', amount: 9.50, frequency: 'weekly', date: '2025-01-12', created_at: '2025-01-12' },
+  { id: '8', user_id: 'demo-user', name: 'Spotify', category: 'subscriptions', amount: 9.99, frequency: 'monthly', date: '2025-01-01', created_at: '2025-01-01' },
+]
+
 interface StatusMessage {
   type: 'success' | 'error'
   text: string
@@ -56,9 +67,24 @@ export default function AddExpensePage() {
 
   const fetchRecentExpenses = async () => {
     setLoadingExpenses(true)
+    if (!hasSupabase()) {
+      // Load mock + localStorage expenses
+      const stored = localStorage.getItem('wdmg_expenses')
+      const localExpenses: Expense[] = stored ? JSON.parse(stored) : []
+      setRecentExpenses([...MOCK_EXPENSES, ...localExpenses].slice(0, 10))
+      setLoadingExpenses(false)
+      return
+    }
+
+    const supabase = getSupabase()
+    if (!supabase) {
+      setLoadingExpenses(false)
+      return
+    }
+
     const {
       data: { user },
-    } = await getSupabase().auth.getUser()
+    } = await supabase.auth.getUser()
     if (!user) {
       setLoadingExpenses(false)
       return
@@ -105,9 +131,39 @@ export default function AddExpensePage() {
     setSubmitting(true)
 
     try {
+      if (!hasSupabase()) {
+        // Save to localStorage
+        const stored = localStorage.getItem('wdmg_expenses')
+        const localExpenses: Expense[] = stored ? JSON.parse(stored) : []
+        const newExpense: Expense = {
+          id: Date.now().toString(),
+          user_id: 'demo-user',
+          name: name.trim(),
+          category,
+          amount: parsedAmount,
+          frequency,
+          date,
+          created_at: new Date().toISOString(),
+        }
+        localExpenses.unshift(newExpense)
+        localStorage.setItem('wdmg_expenses', JSON.stringify(localExpenses))
+        setRecentExpenses([newExpense, ...recentExpenses].slice(0, 10))
+        setStatus({ type: 'success', text: `Added "${name.trim()}" for €${parsedAmount.toFixed(2)}` })
+        resetForm()
+        setSubmitting(false)
+        return
+      }
+
+      const supabase = getSupabase()
+      if (!supabase) {
+        setStatus({ type: 'error', text: 'Supabase is not configured.' })
+        setSubmitting(false)
+        return
+      }
+
       const {
         data: { user },
-      } = await getSupabase().auth.getUser()
+      } = await supabase.auth.getUser()
 
       if (!user) {
         setStatus({ type: 'error', text: 'You must be logged in to add an expense.' })
@@ -115,7 +171,7 @@ export default function AddExpensePage() {
         return
       }
 
-      const { error } = await getSupabase().from('expenses').insert({
+      const { error } = await supabase.from('expenses').insert({
         user_id: user.id,
         name: name.trim(),
         category,
@@ -140,7 +196,24 @@ export default function AddExpensePage() {
   const handleDelete = async (id: string) => {
     setDeletingId(id)
     try {
-      const { error } = await getSupabase().from('expenses').delete().eq('id', id)
+      if (!hasSupabase()) {
+        // Delete from localStorage
+        const stored = localStorage.getItem('wdmg_expenses')
+        const localExpenses: Expense[] = stored ? JSON.parse(stored) : []
+        const filtered = localExpenses.filter((e) => e.id !== id)
+        localStorage.setItem('wdmg_expenses', JSON.stringify(filtered))
+        setRecentExpenses((prev) => prev.filter((e) => e.id !== id))
+        setDeletingId(null)
+        return
+      }
+
+      const supabase = getSupabase()
+      if (!supabase) {
+        setDeletingId(null)
+        return
+      }
+
+      const { error } = await supabase.from('expenses').delete().eq('id', id)
       if (error) throw error
       await fetchRecentExpenses()
     } catch {

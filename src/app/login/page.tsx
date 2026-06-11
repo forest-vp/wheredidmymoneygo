@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { TrendingDown, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react'
-import { getSupabase } from '@/lib/supabase'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -18,13 +17,13 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
+    // Demo mode — just redirect
+    localStorage.setItem('wdmg_demo', 'true')
+    router.push('/dashboard')
+  }
 
-    const { error } = await getSupabase().auth.signInWithPassword({ email, password })
-    if (error) {
-      setError(error.message)
-      setLoading(false)
-      return
-    }
+  const handleDemoLogin = () => {
+    localStorage.setItem('wdmg_demo', 'true')
     router.push('/dashboard')
   }
 
@@ -63,7 +62,6 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors"
                   placeholder="you@example.com"
-                  required
                 />
               </div>
             </div>
@@ -77,7 +75,6 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full bg-bg border border-border rounded-xl pl-11 pr-11 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors"
                   placeholder="••••••••"
-                  required
                 />
                 <button
                   type="button"
@@ -93,10 +90,24 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-all hover:shadow-lg hover:shadow-primary/25 flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              {loading ? 'Signing in...' : 'Sign In'}
-              {!loading && <ArrowRight className="w-4 h-4" />}
+              Sign In
+              <ArrowRight className="w-4 h-4" />
             </button>
           </form>
+
+          <div className="my-6 flex items-center gap-3">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-text-dim text-sm">or</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+
+          <button
+            onClick={handleDemoLogin}
+            className="w-full bg-accent/10 hover:bg-accent/20 text-accent border border-accent/20 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2"
+          >
+            🚀 Try Demo — No Account Needed
+          </button>
+
           <p className="text-center text-text-muted text-sm mt-6">
             Don&apos;t have an account?{' '}
             <Link href="/register" className="text-primary hover:text-primary-hover font-medium">

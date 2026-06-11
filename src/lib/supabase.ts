@@ -4,16 +4,23 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
 let supabaseInstance: SupabaseClient | null = null
 
-export function getSupabase(): SupabaseClient {
-  if (!supabaseInstance) {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-    if (!url || !key) {
-      console.warn('Supabase env vars not set - some features may not work')
+export function getSupabase(): SupabaseClient | null {
+  try {
+    if (!supabaseInstance) {
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+      const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+      if (!url || !key) return null
+      supabaseInstance = createClient(url, key)
     }
-    supabaseInstance = createClient(url || 'https://placeholder.supabase.co', key || 'placeholder-key')
+    return supabaseInstance
+  } catch {
+    return null
   }
-  return supabaseInstance
+}
+
+// Check if supabase is configured
+export function hasSupabase(): boolean {
+  return !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
 }
 
 // Database types

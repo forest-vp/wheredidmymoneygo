@@ -12,12 +12,6 @@ import {
   ArrowRight,
   Sparkles,
 } from 'lucide-react'
-import { getSupabase } from '@/lib/supabase'
-import { loadStripe } from '@stripe/stripe-js'
-
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ''
-)
 
 const plans = [
   {
@@ -84,81 +78,9 @@ const plans = [
 ]
 
 export default function PricingPage() {
-  const [loading, setLoading] = useState<string | null>(null)
-
-  const handleUpgrade = async (plan: string) => {
-    try {
-      setLoading(plan)
-
-      const {
-        data: { user },
-      } = await getSupabase().auth.getUser()
-
-      if (!user) {
-        window.location.href = '/register'
-        return
-      }
-
-      const { data: profile } = await supabase
-        .from('users')
-        .select('stripe_customer_id')
-        .eq('id', user.id)
-        .single()
-
-      let stripeCustomerId = profile?.stripe_customer_id
-
-      if (!stripeCustomerId) {
-        const customerResponse = await fetch('/api/create-stripe-customer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: user.email,
-            userId: user.id,
-          }),
-        })
-
-        const customerData = await customerResponse.json()
-        stripeCustomerId = customerData.customerId
-
-        if (!stripeCustomerId) {
-          throw new Error('Failed to create Stripe customer')
-        }
-      }
-
-      const priceId =
-        plan === 'pro'
-          ? process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID
-          : process.env.NEXT_PUBLIC_STRIPE_PREMIUM_PRICE_ID
-
-      const { sessionId } = await fetch('/api/create-checkout-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerId: stripeCustomerId,
-          priceId,
-          plan,
-          userId: user.id,
-        }),
-      }).then((res) => res.json())
-
-      if (!sessionId) {
-        throw new Error('Failed to create checkout session')
-      }
-
-      const stripe = await stripePromise
-      if (!stripe) {
-        throw new Error('Stripe failed to load')
-      }
-
-      const { error } = await stripe.redirectToCheckout({ sessionId })
-      if (error) {
-        throw error
-      }
-    } catch (err) {
-      console.error('Upgrade error:', err)
-    } finally {
-      setLoading(null)
-    }
+  const handleUpgrade = (plan: string) => {
+    // Demo mode — Stripe not connected
+    alert(`🎉 ${plan === 'pro' ? 'Pro' : 'Premium'} plan selected!\n\nConnect Stripe to enable real subscriptions.\n\nFor now, enjoy the demo!`)
   }
 
   return (
@@ -272,16 +194,13 @@ export default function PricingPage() {
                 ) : (
                   <button
                     onClick={() => handleUpgrade(plan.name.toLowerCase())}
-                    disabled={loading === plan.name.toLowerCase()}
                     className={`w-full text-center py-3 rounded-xl font-medium transition-all mb-8 ${
                       plan.popular
                         ? 'bg-primary hover:bg-primary-hover text-white hover:shadow-lg hover:shadow-primary/25'
                         : 'bg-accent hover:bg-accent-hover text-bg hover:shadow-lg hover:shadow-accent/25'
-                    } ${loading === plan.name.toLowerCase() ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    }`}
                   >
-                    {loading === plan.name.toLowerCase()
-                      ? 'Redirecting...'
-                      : plan.cta}
+                    {plan.cta}
                   </button>
                 )}
 

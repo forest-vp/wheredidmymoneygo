@@ -17,7 +17,6 @@ import {
   X,
   ChevronRight,
 } from 'lucide-react'
-import { getSupabase } from '@/lib/supabase'
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -35,55 +34,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [user, setUser] = useState<{ email?: string; id?: string } | null>(null)
   const [planType, setPlanType] = useState<string>('free')
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const getUser = async () => {
-      try {
-        const supabase = getSupabase()
-        const {
-          data: { user },
-        } = await getSupabase().auth.getUser()
-        setUser(user)
-
-        if (user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('plan_type')
-            .eq('id', user.id)
-            .single()
-          if (profile) setPlanType(profile.plan_type || 'free')
-        }
-      } catch (err) {
-        console.error('Auth error:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-    getUser()
+    // Demo mode
+    setUser({ id: 'demo-user', email: 'demo@wdmg.app' })
+    setPlanType('free')
   }, [])
 
-  const handleLogout = async () => {
-    try {
-      const supabase = getSupabase()
-      await getSupabase().auth.signOut()
-    } catch (err) {
-      console.error('Logout error:', err)
-    }
+  const handleLogout = () => {
+    localStorage.removeItem('wdmg_demo')
     router.push('/login')
   }
 
   return (
     <div className="min-h-screen bg-bg flex">
-      {/* Mobile overlay */}
       {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <aside
         className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-bg-sidebar border-r border-border flex flex-col transition-transform duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
@@ -96,10 +64,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
             <span className="text-lg font-bold">WDMG</span>
           </Link>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="lg:hidden text-text-muted hover:text-text"
-          >
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-text-muted hover:text-text">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -113,9 +78,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 href={item.href}
                 onClick={() => setSidebarOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  isActive
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-text-muted hover:text-text hover:bg-bg-card'
+                  isActive ? 'bg-primary/10 text-primary' : 'text-text-muted hover:text-text hover:bg-bg-card'
                 }`}
               >
                 <item.icon className="w-5 h-5" />
@@ -128,17 +91,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <div className="p-3 border-t border-border">
           <div className="px-3 py-2 mb-2">
-            <p className="text-xs text-text-dim truncate">{loading ? 'Loading...' : user?.email || 'Not logged in'}</p>
-            <span
-              className={`inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full ${
-                planType === 'premium'
-                  ? 'bg-accent/20 text-accent'
-                  : planType === 'pro'
-                  ? 'bg-primary/20 text-primary'
-                  : 'bg-border text-text-dim'
-              }`}
-            >
-              {planType.charAt(0).toUpperCase() + planType.slice(1)}
+            <p className="text-xs text-text-dim truncate">{user?.email || 'demo@wdmg.app'}</p>
+            <span className="inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full bg-border text-text-dim">
+              Free
             </span>
           </div>
           <button
@@ -151,9 +106,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      {/* Main content */}
       <main className="flex-1 min-h-screen overflow-auto">
-        {/* Mobile header */}
         <div className="lg:hidden flex items-center justify-between p-4 border-b border-border">
           <button onClick={() => setSidebarOpen(true)} className="text-text-muted hover:text-text">
             <Menu className="w-6 h-6" />
