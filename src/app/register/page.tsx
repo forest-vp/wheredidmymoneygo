@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { TrendingDown, Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, Loader2, User, Calendar, Globe } from 'lucide-react'
-
 import { getSupabase } from '@/lib/supabase'
 
 export default function RegisterPage() {
@@ -37,43 +36,55 @@ export default function RegisterPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-
     if (password !== confirmPassword) { setError('Passwords do not match'); return }
     if (password.length < 8) { setError('Password must be at least 8 characters'); return }
 
     setLoading(true)
+    const supabase = getSupabase()
+    if (!supabase) { setError('Unable to connect. Please try again.'); setLoading(false); return }
 
-    // Create user via server-side API (uses Supabase admin = NO rate limits)
-    try {
-      const res = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, fullName, birthDate, country }),
-      })
-      const data = await res.json()
+    // Create user via client-side signUp (auto-creates session + no admin needed)
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: fullName } },
+    })
 
-      if (!res.ok) {
-        setError(data.error || 'Failed to create account. Please try again.')
-        setLoading(false)
-        return
+    if (signUpError) {
+      if (signUpError.message.includes('rate limit') || signUpError.message.includes('Too many')) {
+        setError('Too many signup attempts. Please wait 15 minutes and try again.')
+      } else if (signUpError.message.includes('already registered')) {
+        setError('This email is already registered. Try signing in instead.')
+      } else {
+        setError(signUpError.message)
       }
-    } catch {
-      setError('Unable to connect. Please try again.')
       setLoading(false)
       return
     }
 
-    // Sign in the user so they have a session
-    const supabase = getSupabase()
-    if (supabase) {
+    // Save email for display
+    localStorage.setItem('wdmg_user_email', email)
+
+    // Update profile with extra info
+    if (data?.user) {
       try {
-        await supabase.auth.signInWithPassword({ email, password })
-      } catch {
-        // If sign-in fails, user can still verify via email link
-      }
+        await supabase.from('profiles').update({
+          full_name: fullName,
+          birth_date: birthDate,
+          country,
+        }).eq('id', data.user.id)
+      } catch { /* non-blocking */ }
     }
 
-    localStorage.setItem('wdmg_user_email', email)
+    // Send verification email via admin API (no rate limits)
+    try {
+      await fetch('/api/auth/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, type: 'signup' }),
+      })
+    } catch { /* non-blocking */ }
+
     setSuccess(true)
     setLoading(false)
   }
@@ -93,19 +104,14 @@ export default function RegisterPage() {
             <h1 className="text-2xl font-bold mb-2">Check your email</h1>
             <p className="text-text-muted text-sm mb-2">We sent a verification link to</p>
             <p className="text-primary font-medium mb-4 break-all">{email}</p>
-            <p className="text-text-dim text-sm mb-6">
-              Click the link in the email to verify your account and start your onboarding.
-            </p>
-            <div className="bg-bg rounded-xl p-4 text-left text-sm text-text-muted mb-6">
-              <p className="font-medium text-text mb-2">Didn&apos;t receive it?</p>
-              <ul className="space-y-1 text-xs">
-                <li>• Check your spam/junk folder</li>
-                <li>• Wait a few minutes for delivery</li>
-              </ul>
+            <p className="text-text-dim text-sm mb-6">Click the link to verify your account. You can also skip and start using the app now.</p>
+            <div className="flex gap-3">
+              <button onClick={() => router.push('/onboarding')}
+                className="flex-1 bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2">
+                Start Onboarding <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
-            <Link href="/login" className="inline-flex items-center gap-2 text-text-muted hover:text-text text-sm">
-              <ArrowLeft className="w-4 h-4" /> Back to login
-            </Link>
+            <p className="text-text-dim text-xs mt-4">You can verify your email later from settings.</p>
           </div>
         </div>
       </div>
@@ -134,9 +140,7 @@ export default function RegisterPage() {
         </div>
 
         <div className="glass-card rounded-2xl p-6 sm:p-8">
-          {error && (
-            <div className="bg-danger/10 border border-danger/20 rounded-xl p-3 text-danger text-sm mb-5">{error}</div>
-          )}
+          {error && <div className="bg-danger/10 border border-danger/20 rounded-xl p-3 text-danger text-sm mb-5">{error}</div>}
 
           {fullStep === 1 && (
             <div className="space-y-4 sm:space-y-5">
@@ -144,14 +148,14 @@ export default function RegisterPage() {
                 <label className="block text-sm font-medium text-text-muted mb-2">Full Name</label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
-                  <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors" placeholder="John Doe" required autoFocus />
+                  <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder:text-text-dim focus:outline-none focus:border-primary transition-colors" placeholder="John Doe" required autoFocus />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-text-muted mb-2">Email Address</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
-                  <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors" placeholder="you@example.com" required />
+                  <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder:text-text-dim focus:outline-none focus:border-primary transition-colors" placeholder="you@example.com" required />
                 </div>
               </div>
               <button type="button" onClick={handleNext} className="w-full bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2">
@@ -193,7 +197,7 @@ export default function RegisterPage() {
                 <label className="block text-sm font-medium text-text-muted mb-2">Password (min 8 characters)</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
-                  <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-bg border border-border rounded-xl pl-11 pr-11 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors" placeholder="Min 8 characters" required minLength={8} autoFocus />
+                  <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-bg border border-border rounded-xl pl-11 pr-11 py-3 text-text placeholder:text-text-dim focus:outline-none focus:border-primary transition-colors" placeholder="Min 8 characters" required minLength={8} autoFocus />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text">
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
@@ -203,7 +207,7 @@ export default function RegisterPage() {
                 <label className="block text-sm font-medium text-text-muted mb-2">Confirm Password</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
-                  <input type={showPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors" placeholder="Repeat password" required minLength={8} />
+                  <input type={showPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder:text-text-dim focus:outline-none focus:border-primary transition-colors" placeholder="Repeat password" required minLength={8} />
                 </div>
               </div>
               <div className="flex gap-3">
