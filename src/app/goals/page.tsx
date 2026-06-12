@@ -2,16 +2,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import {
-  Target,
-  Plus,
-  TrendingUp,
-  Calendar,
-  CheckCircle,
-  AlertCircle,
-  X,
-} from 'lucide-react'
+import { Target, Plus, TrendingUp, Calendar, CheckCircle, AlertCircle, X, ArrowLeft } from 'lucide-react'
 import { getSupabase, hasSupabase } from '@/lib/supabase'
+import Link from 'next/link'
 
 interface Goal {
   id: string
@@ -247,6 +240,9 @@ export default function GoalsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
+          <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-text-muted hover:text-text text-sm mb-2 transition-colors">
+            <ArrowLeft className="w-4 h-4" /> Dashboard
+          </Link>
           <h1 className="text-3xl font-bold mb-1">Goals</h1>
           <p className="text-text-muted">Track your savings targets</p>
         </div>

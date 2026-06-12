@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { TrendingDown, Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, Loader2, User, Calendar, Globe } from 'lucide-react'
 
+import { getSupabase } from '@/lib/supabase'
+
 export default function RegisterPage() {
   const router = useRouter()
   const [fullStep, setFullStep] = useState(1)
@@ -59,6 +61,16 @@ export default function RegisterPage() {
       setError('Unable to connect. Please try again.')
       setLoading(false)
       return
+    }
+
+    // Sign in the user so they have a session
+    const supabase = getSupabase()
+    if (supabase) {
+      try {
+        await supabase.auth.signInWithPassword({ email, password })
+      } catch {
+        // If sign-in fails, user can still verify via email link
+      }
     }
 
     localStorage.setItem('wdmg_user_email', email)
