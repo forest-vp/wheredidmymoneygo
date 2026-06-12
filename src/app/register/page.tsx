@@ -8,7 +8,7 @@ import { getSupabase, hasSupabase } from '@/lib/supabase'
 
 export default function RegisterPage() {
   const router = useRouter()
-  const [step, setStep] = useState(1)
+  const [fullStep, setFullStep] = useState(1)
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [birthDate, setBirthDate] = useState('')
@@ -18,17 +18,18 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
 
   const handleNext = () => {
     setError('')
-    if (step === 1) {
+    if (fullStep === 1) {
       if (!fullName.trim()) { setError('Please enter your full name'); return }
       if (!email.trim() || !email.includes('@')) { setError('Please enter a valid email'); return }
-      setStep(2)
-    } else if (step === 2) {
+      setFullStep(2)
+    } else if (fullStep === 2) {
       if (!birthDate) { setError('Please enter your birth date'); return }
       if (!country) { setError('Please select your country'); return }
-      setStep(3)
+      setFullStep(3)
     }
   }
 
@@ -55,19 +56,25 @@ export default function RegisterPage() {
       password,
       options: {
         data: { full_name: fullName },
+        // No redirect — stay on site
+        emailRedirectTo: undefined,
       },
     })
 
     if (signUpError) {
-      setError(signUpError.message)
+      if (signUpError.message.includes('rate limit')) {
+        setError('Too many signup attempts. Please wait a minute and try again.')
+      } else {
+        setError(signUpError.message)
+      }
       setLoading(false)
       return
     }
 
-    // Save email for dashboard display
+    // Save email for dashboard
     localStorage.setItem('wdmg_user_email', email)
 
-    // Update profile with extra info
+    // Update profile
     if (data?.user) {
       await supabase.from('profiles').update({
         full_name: fullName,
@@ -76,16 +83,40 @@ export default function RegisterPage() {
       }).eq('id', data.user.id)
     }
 
-    // If we got a session, user is auto-logged in (no email confirmation needed)
+    // If we got a session — email confirmation is disabled — auto-login
     if (data?.session) {
-      router.push('/onboarding')
+      setSuccess(true)
+      setTimeout(() => router.push('/onboarding'), 1000)
     } else {
-      // Email confirmation required — show success screen
-      setLoading(false)
-      // Redirect to a "check email" view
-      router.push(`/auth/verify?email=${encodeURIComponent(email)}`)
+      // Email confirmation required — but we handle this by letting user
+      // verify later. For now, show a screen telling them to check email.
+      // OR: if signup worked but no session, the user can still log in.
+      setSuccess(true)
+      setTimeout(() => router.push('/login?registered=true'), 1500)
     }
     setLoading(false)
+  }
+
+  if (success) {
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center px-6">
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute top-1/3 left-1/3 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-1/3 right-1/3 w-96 h-96 bg-accent/5 rounded-full blur-3xl" />
+        </div>
+        <div className="w-full max-w-md relative z-10 text-center">
+          <div className="glass-card rounded-2xl p-8">
+            <div className="w-16 h-16 rounded-full bg-accent/20 flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">🎉</span>
+            </div>
+            <h1 className="text-2xl font-bold mb-2">Account Created!</h1>
+            <p className="text-text-muted mb-4">
+              Your account has been created successfully. Redirecting to onboarding...
+            </p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   const COUNTRIES = ['Albania', 'Argentina', 'Australia', 'Austria', 'Belgium', 'Brazil', 'Bulgaria', 'Canada', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Egypt', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'India', 'Indonesia', 'Ireland', 'Italy', 'Japan', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Mexico', 'Netherlands', 'Norway', 'Poland', 'Portugal', 'Romania', 'Serbia', 'Singapore', 'Slovakia', 'Slovenia', 'South Africa', 'South Korea', 'Spain', 'Sweden', 'Switzerland', 'Thailand', 'Turkey', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'United States', 'Vietnam'].sort()
@@ -105,10 +136,10 @@ export default function RegisterPage() {
             <span className="text-2xl font-bold">WDMG</span>
           </Link>
           <h1 className="text-2xl font-bold mb-2">Create your account</h1>
-          <p className="text-text-muted">Step {step} of 3 — Your personal info</p>
+          <p className="text-text-muted">{fullStep === 3 ? 'Set your password' : `Step ${fullStep} of 3 — Your personal info`}</p>
           <div className="flex gap-2 justify-center mt-4">
             {[1, 2, 3].map(s => (
-              <div key={s} className={`h-2 rounded-full transition-all ${s <= step ? 'w-8 bg-primary' : 'w-2 bg-border'}`} />
+              <div key={s} className={`h-2 rounded-full transition-all ${s <= fullStep ? 'w-8 bg-primary' : 'w-2 bg-border'}`} />
             ))}
           </div>
         </div>
@@ -120,7 +151,7 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {step === 1 && (
+          {fullStep === 1 && (
             <div className="space-y-5">
               <div>
                 <label className="block text-sm font-medium text-text-muted mb-2">Full Name</label>
@@ -128,7 +159,7 @@ export default function RegisterPage() {
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
                   <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)}
                     className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors"
-                    placeholder="John Doe" required />
+                    placeholder="John Doe" required autoFocus />
                 </div>
               </div>
               <div>
@@ -147,14 +178,14 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {step === 2 && (
+          {fullStep === 2 && (
             <div className="space-y-5">
               <div>
                 <label className="block text-sm font-medium text-text-muted mb-2">Birth Date</label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
                   <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)}
-                    className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text focus:outline-none focus:border-primary transition-colors" required />
+                    className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text focus:outline-none focus:border-primary transition-colors" required autoFocus />
                 </div>
               </div>
               <div>
@@ -169,7 +200,7 @@ export default function RegisterPage() {
                 </div>
               </div>
               <div className="flex gap-3">
-                <button type="button" onClick={() => setStep(1)}
+                <button type="button" onClick={() => setFullStep(1)}
                   className="px-6 border border-border text-text-muted hover:text-text py-3 rounded-xl font-medium transition-all">
                   Back
                 </button>
@@ -181,7 +212,7 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {step === 3 && (
+          {fullStep === 3 && (
             <form onSubmit={handleRegister} className="space-y-5">
               <div>
                 <label className="block text-sm font-medium text-text-muted mb-2">Password (min 8 characters)</label>
@@ -189,7 +220,7 @@ export default function RegisterPage() {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
                   <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
                     className="w-full bg-bg border border-border rounded-xl pl-11 pr-11 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors"
-                    placeholder="Min 8 characters" required minLength={8} />
+                    placeholder="Min 8 characters" required minLength={8} autoFocus />
                   <button type="button" onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text">
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -206,7 +237,7 @@ export default function RegisterPage() {
                 </div>
               </div>
               <div className="flex gap-3">
-                <button type="button" onClick={() => setStep(2)} disabled={loading}
+                <button type="button" onClick={() => setFullStep(2)} disabled={loading}
                   className="px-6 border border-border text-text-muted hover:text-text py-3 rounded-xl font-medium transition-all disabled:opacity-50">
                   Back
                 </button>

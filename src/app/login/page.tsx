@@ -1,13 +1,16 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { TrendingDown, Mail, Lock, Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-react'
 import { getSupabase, hasSupabase } from '@/lib/supabase'
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const justRegistered = searchParams.get('registered') === 'true'
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -71,12 +74,19 @@ export default function LoginPage() {
         </div>
 
         <div className="glass-card rounded-2xl p-8">
+          {justRegistered && (
+            <div className="bg-accent/10 border border-accent/20 rounded-xl p-3 text-accent text-sm mb-5 flex items-center gap-2">
+              ✅ Account created successfully! Sign in to continue.
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-danger/10 border border-danger/20 rounded-xl p-3 text-danger text-sm mb-5">
+              {error}
+            </div>
+          )}
+
           <form onSubmit={handleLogin} className="space-y-5">
-            {error && (
-              <div className="bg-danger/10 border border-danger/20 rounded-xl p-3 text-danger text-sm">
-                {error}
-              </div>
-            )}
             <div>
               <label className="block text-sm font-medium text-text-muted mb-2">Email</label>
               <div className="relative">
@@ -113,5 +123,17 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-bg flex items-center justify-center">
+        <div className="text-text-muted animate-pulse">Loading...</div>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   )
 }
