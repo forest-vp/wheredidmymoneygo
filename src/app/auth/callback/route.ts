@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get('code')
   const error = requestUrl.searchParams.get('error')
   const errorDescription = requestUrl.searchParams.get('error_description')
+  const type = requestUrl.searchParams.get('type')
 
   if (error) {
     return NextResponse.redirect(
@@ -14,11 +15,13 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  if (code) {
-    // Redirect to the verify page with the code — client-side Supabase SDK will exchange it
-    return NextResponse.redirect(`${siteUrl}/auth/verify?code=${encodeURIComponent(code)}`)
+  if (!code) {
+    return NextResponse.redirect(`${siteUrl}/login?error=Missing+verification+code`)
   }
 
-  // No code and no error — redirect to login
-  return NextResponse.redirect(`${siteUrl}/login`)
+  // Redirect to the verify page with the code
+  // The verify page will call the client-side Supabase SDK to verify the code
+  // which creates a session
+  const redirectType = type || 'signup'
+  return NextResponse.redirect(`${siteUrl}/auth/callback-process?code=${encodeURIComponent(code)}&type=${redirectType}`)
 }

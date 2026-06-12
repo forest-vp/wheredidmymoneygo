@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { TrendingDown, Mail, Lock, Eye, EyeOff, ArrowRight, Loader2, User, Calendar, Globe } from 'lucide-react'
+import { TrendingDown, Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, Loader2, User, Calendar, Globe } from 'lucide-react'
 import { getSupabase, hasSupabase } from '@/lib/supabase'
 
 export default function RegisterPage() {
@@ -51,8 +51,8 @@ export default function RegisterPage() {
     const supabase = getSupabase()
     if (!supabase) { setError('Unable to connect. Please try again.'); setLoading(false); return }
 
-    // 1. Create the user (email confirmation disabled in Supabase)
-    const { data, error: signUpError } = await supabase.auth.signUp({
+    // Step 1: Create the user via Supabase signUp (email confirmation OFF = instant account)
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -62,9 +62,7 @@ export default function RegisterPage() {
     })
 
     if (signUpError) {
-      if (signUpError.message.includes('rate limit')) {
-        setError('Too many signup attempts. Please wait a minute and try again.')
-      } else if (signUpError.message.includes('already registered')) {
+      if (signUpError.message.includes('already registered')) {
         setError('This email is already registered. Try signing in instead.')
       } else {
         setError(signUpError.message)
@@ -73,54 +71,74 @@ export default function RegisterPage() {
       return
     }
 
-    // 2. Save email for dashboard
+    // Step 2: Save email for dashboard
     localStorage.setItem('wdmg_user_email', email)
 
-    // 3. Update profile with extra info
-    if (data?.user) {
+    // Step 3: Update profile with extra info
+    if (signUpData?.user) {
       await supabase.from('profiles').update({
         full_name: fullName,
         birth_date: birthDate,
         country,
-      }).eq('id', data.user.id)
+      }).eq('id', signUpData.user.id)
     }
 
-    // 4. Send verification code
+    // Step 4: Send verification email via Supabase admin API
+    // This calls our server-side API which uses the service role key
     try {
-      await fetch('/api/auth/send-code', {
+      const res = await fetch('/api/auth/send-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, type: 'signup' }),
       })
+      const data = await res.json()
+      
+      if (!data.success) {
+        console.warn('Send code failed:', data.error)
+        // Non-blocking — user can still verify later
+      }
     } catch {
-      // Non-blocking — code sending failure shouldn't stop signup
+      // Non-blocking
     }
 
-    // 5. If we got a session (auto-login), go to verify page
-    // User must verify email before accessing the app
+    // Step 5: Show success — user must check email and click the link
     setSuccess(true)
-    setTimeout(() => {
-      router.push(`/auth/verify?email=${encodeURIComponent(email)}&type=signup`)
-    }, 1500)
     setLoading(false)
   }
 
   if (success) {
     return (
-      <div className="min-h-screen bg-bg flex items-center justify-center px-6">
+      <div className="min-h-screen bg-bg flex items-center justify-center px-4 sm:px-6">
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute top-1/3 left-1/3 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
           <div className="absolute bottom-1/3 right-1/3 w-96 h-96 bg-accent/5 rounded-full blur-3xl" />
         </div>
         <div className="w-full max-w-md relative z-10 text-center">
-          <div className="glass-card rounded-2xl p-8">
-            <div className="w-16 h-16 rounded-full bg-accent/20 flex items-center justify-center mx-auto mb-4">
-              <span className="text-3xl">🎉</span>
+          <div className="glass-card rounded-2xl p-6 sm:p-8">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+              <Mail className="w-8 h-8 text-primary" />
             </div>
-            <h1 className="text-2xl font-bold mb-2">Account Created!</h1>
-            <p className="text-text-muted mb-2">We sent a verification code to</p>
+            <h1 className="text-2xl font-bold mb-2">Check your email</h1>
+            <p className="text-text-muted text-sm mb-2">
+              We sent a verification link to
+            </p>
             <p className="text-primary font-medium mb-4">{email}</p>
-            <p className="text-text-dim text-sm">Redirecting to verification...</p>
+            <p className="text-text-dim text-sm mb-6">
+              Click the link in the email to verify your account and start your onboarding.
+            </p>
+            <div className="bg-bg rounded-xl p-4 text-left text-sm text-text-muted mb-6">
+              <p className="font-medium text-text mb-2">Didn&apos;t receive the email?</p>
+              <ul className="space-y-1 text-xs">
+                <li>• Check your spam/junk folder</li>
+                <li>• Make sure <span className="text-text">{email}</span> is correct</li>
+                <li>• Wait a few minutes and try again</li>
+              </ul>
+            </div>
+            <Link href="/login"
+              className="inline-flex items-center gap-2 text-text-muted hover:text-text transition-colors text-sm">
+              <ArrowLeft className="w-4 h-4" />
+              Back to login
+            </Link>
           </div>
         </div>
       </div>
