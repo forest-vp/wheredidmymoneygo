@@ -18,7 +18,6 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
 
   const handleNext = () => {
     setError('')
@@ -43,7 +42,7 @@ export default function RegisterPage() {
     setLoading(true)
 
     if (!hasSupabase()) {
-      setError('Supabase is not configured yet. Please set up your environment variables.')
+      setError('Supabase is not configured yet.')
       setLoading(false)
       return
     }
@@ -65,7 +64,7 @@ export default function RegisterPage() {
       return
     }
 
-    // Save email to localStorage for dashboard display
+    // Save email for dashboard display
     localStorage.setItem('wdmg_user_email', email)
 
     // Update profile with extra info
@@ -77,47 +76,14 @@ export default function RegisterPage() {
       }).eq('id', data.user.id)
     }
 
-    // Check if email confirmation is required
-    if (data?.user && !data.session) {
-      // Email confirmation required
-      setSuccess(true)
-      setLoading(false)
-      return
+    // If we got a session, user is auto-logged in (no email confirmation needed)
+    if (data?.session) {
+      router.push('/onboarding')
+    } else {
+      // Email confirmation required — show message
+      setError('Please check your email for a confirmation link, then sign in.')
     }
-
-    // Auto-login successful — go to onboarding
-    router.push('/onboarding')
-  }
-
-  if (success) {
-    return (
-      <div className="min-h-screen bg-bg flex items-center justify-center px-6">
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute top-1/3 left-1/3 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-          <div className="absolute bottom-1/3 right-1/3 w-96 h-96 bg-accent/5 rounded-full blur-3xl" />
-        </div>
-        <div className="w-full max-w-md relative z-10 text-center">
-          <div className="glass-card rounded-2xl p-8">
-            <div className="w-16 h-16 rounded-full bg-accent/20 flex items-center justify-center mx-auto mb-4">
-              <Mail className="w-8 h-8 text-accent" />
-            </div>
-            <h1 className="text-2xl font-bold mb-2">Check your email</h1>
-            <p className="text-text-muted mb-2">
-              We sent a confirmation link to
-            </p>
-            <p className="text-primary font-medium mb-6">{email}</p>
-            <p className="text-text-dim text-sm mb-6">
-              Click the link in the email to activate your account, then sign in.
-            </p>
-            <Link href="/login"
-              className="inline-flex items-center gap-2 bg-primary hover:bg-primary-hover text-white px-6 py-3 rounded-xl font-medium transition-all">
-              Go to Login
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </div>
-      </div>
-    )
+    setLoading(false)
   }
 
   const COUNTRIES = ['Albania', 'Argentina', 'Australia', 'Austria', 'Belgium', 'Brazil', 'Bulgaria', 'Canada', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Egypt', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'India', 'Indonesia', 'Ireland', 'Italy', 'Japan', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Mexico', 'Netherlands', 'Norway', 'Poland', 'Portugal', 'Romania', 'Serbia', 'Singapore', 'Slovakia', 'Slovenia', 'South Africa', 'South Korea', 'Spain', 'Sweden', 'Switzerland', 'Thailand', 'Turkey', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'United States', 'Vietnam'].sort()
