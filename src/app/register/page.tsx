@@ -51,12 +51,12 @@ export default function RegisterPage() {
     const supabase = getSupabase()
     if (!supabase) { setError('Unable to connect. Please try again.'); setLoading(false); return }
 
+    // 1. Create the user (email confirmation disabled in Supabase)
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: { full_name: fullName },
-        // No redirect — stay on site
         emailRedirectTo: undefined,
       },
     })
@@ -64,6 +64,8 @@ export default function RegisterPage() {
     if (signUpError) {
       if (signUpError.message.includes('rate limit')) {
         setError('Too many signup attempts. Please wait a minute and try again.')
+      } else if (signUpError.message.includes('already registered')) {
+        setError('This email is already registered. Try signing in instead.')
       } else {
         setError(signUpError.message)
       }
@@ -71,10 +73,10 @@ export default function RegisterPage() {
       return
     }
 
-    // Save email for dashboard
+    // 2. Save email for dashboard
     localStorage.setItem('wdmg_user_email', email)
 
-    // Update profile
+    // 3. Update profile with extra info
     if (data?.user) {
       await supabase.from('profiles').update({
         full_name: fullName,
@@ -83,17 +85,23 @@ export default function RegisterPage() {
       }).eq('id', data.user.id)
     }
 
-    // If we got a session — email confirmation is disabled — auto-login
-    if (data?.session) {
-      setSuccess(true)
-      setTimeout(() => router.push('/onboarding'), 1000)
-    } else {
-      // Email confirmation required — but we handle this by letting user
-      // verify later. For now, show a screen telling them to check email.
-      // OR: if signup worked but no session, the user can still log in.
-      setSuccess(true)
-      setTimeout(() => router.push('/login?registered=true'), 1500)
+    // 4. Send verification code
+    try {
+      await fetch('/api/auth/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, type: 'signup' }),
+      })
+    } catch {
+      // Non-blocking — code sending failure shouldn't stop signup
     }
+
+    // 5. If we got a session (auto-login), go to verify page
+    // User must verify email before accessing the app
+    setSuccess(true)
+    setTimeout(() => {
+      router.push(`/auth/verify?email=${encodeURIComponent(email)}&type=signup`)
+    }, 1500)
     setLoading(false)
   }
 
@@ -110,9 +118,9 @@ export default function RegisterPage() {
               <span className="text-3xl">🎉</span>
             </div>
             <h1 className="text-2xl font-bold mb-2">Account Created!</h1>
-            <p className="text-text-muted mb-4">
-              Your account has been created successfully. Redirecting to onboarding...
-            </p>
+            <p className="text-text-muted mb-2">We sent a verification code to</p>
+            <p className="text-primary font-medium mb-4">{email}</p>
+            <p className="text-text-dim text-sm">Redirecting to verification...</p>
           </div>
         </div>
       </div>
@@ -122,21 +130,21 @@ export default function RegisterPage() {
   const COUNTRIES = ['Albania', 'Argentina', 'Australia', 'Austria', 'Belgium', 'Brazil', 'Bulgaria', 'Canada', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Egypt', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'India', 'Indonesia', 'Ireland', 'Italy', 'Japan', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Mexico', 'Netherlands', 'Norway', 'Poland', 'Portugal', 'Romania', 'Serbia', 'Singapore', 'Slovakia', 'Slovenia', 'South Africa', 'South Korea', 'Spain', 'Sweden', 'Switzerland', 'Thailand', 'Turkey', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'United States', 'Vietnam'].sort()
 
   return (
-    <div className="min-h-screen bg-bg flex items-center justify-center px-6">
+    <div className="min-h-screen bg-bg flex items-center justify-center px-4 sm:px-6 py-8">
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute top-1/3 left-1/3 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
         <div className="absolute bottom-1/3 right-1/3 w-96 h-96 bg-accent/5 rounded-full blur-3xl" />
       </div>
       <div className="w-full max-w-md relative z-10">
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 mb-6">
+        <div className="text-center mb-6 sm:mb-8">
+          <Link href="/" className="inline-flex items-center gap-2 mb-4 sm:mb-6">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
               <TrendingDown className="w-6 h-6 text-bg" />
             </div>
             <span className="text-2xl font-bold">WDMG</span>
           </Link>
-          <h1 className="text-2xl font-bold mb-2">Create your account</h1>
-          <p className="text-text-muted">{fullStep === 3 ? 'Set your password' : `Step ${fullStep} of 3 — Your personal info`}</p>
+          <h1 className="text-xl sm:text-2xl font-bold mb-2">Create your account</h1>
+          <p className="text-text-muted text-sm">{fullStep === 3 ? 'Set your password' : `Step ${fullStep} of 3`}</p>
           <div className="flex gap-2 justify-center mt-4">
             {[1, 2, 3].map(s => (
               <div key={s} className={`h-2 rounded-full transition-all ${s <= fullStep ? 'w-8 bg-primary' : 'w-2 bg-border'}`} />
@@ -144,7 +152,7 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        <div className="glass-card rounded-2xl p-8">
+        <div className="glass-card rounded-2xl p-6 sm:p-8">
           {error && (
             <div className="bg-danger/10 border border-danger/20 rounded-xl p-3 text-danger text-sm mb-5">
               {error}
@@ -152,7 +160,7 @@ export default function RegisterPage() {
           )}
 
           {fullStep === 1 && (
-            <div className="space-y-5">
+            <div className="space-y-4 sm:space-y-5">
               <div>
                 <label className="block text-sm font-medium text-text-muted mb-2">Full Name</label>
                 <div className="relative">
@@ -179,33 +187,47 @@ export default function RegisterPage() {
           )}
 
           {fullStep === 2 && (
-            <div className="space-y-5">
+            <div className="space-y-4 sm:space-y-5">
               <div>
                 <label className="block text-sm font-medium text-text-muted mb-2">Birth Date</label>
                 <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
-                  <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)}
-                    className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text focus:outline-none focus:border-primary transition-colors" required autoFocus />
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim pointer-events-none" />
+                  <input
+                    type="date"
+                    value={birthDate}
+                    onChange={(e) => setBirthDate(e.target.value)}
+                    max={new Date().toISOString().split('T')[0]}
+                    min="1920-01-01"
+                    className="w-full bg-bg border border-border rounded-xl pl-12 pr-4 py-3 text-text focus:outline-none focus:border-primary transition-colors text-base"
+                    style={{ colorScheme: 'dark' }}
+                    required
+                    autoFocus
+                  />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-text-muted mb-2">Country</label>
                 <div className="relative">
-                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
+                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim pointer-events-none" />
                   <select value={country} onChange={(e) => setCountry(e.target.value)}
-                    className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text appearance-none focus:outline-none focus:border-primary transition-colors cursor-pointer" required>
+                    className="w-full bg-bg border border-border rounded-xl pl-12 pr-10 py-3 text-text appearance-none focus:outline-none focus:border-primary transition-colors cursor-pointer text-base" required>
                     <option value="">Select your country</option>
                     {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <svg className="w-4 h-4 text-text-dim" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
                 </div>
               </div>
               <div className="flex gap-3">
                 <button type="button" onClick={() => setFullStep(1)}
-                  className="px-6 border border-border text-text-muted hover:text-text py-3 rounded-xl font-medium transition-all">
+                  className="px-4 sm:px-6 border border-border text-text-muted hover:text-text py-3 rounded-xl font-medium transition-all text-sm sm:text-base">
                   Back
                 </button>
                 <button type="button" onClick={handleNext}
-                  className="flex-1 bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2">
+                  className="flex-1 bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 text-sm sm:text-base">
                   Continue <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
@@ -213,7 +235,7 @@ export default function RegisterPage() {
           )}
 
           {fullStep === 3 && (
-            <form onSubmit={handleRegister} className="space-y-5">
+            <form onSubmit={handleRegister} className="space-y-4 sm:space-y-5">
               <div>
                 <label className="block text-sm font-medium text-text-muted mb-2">Password (min 8 characters)</label>
                 <div className="relative">
@@ -238,11 +260,11 @@ export default function RegisterPage() {
               </div>
               <div className="flex gap-3">
                 <button type="button" onClick={() => setFullStep(2)} disabled={loading}
-                  className="px-6 border border-border text-text-muted hover:text-text py-3 rounded-xl font-medium transition-all disabled:opacity-50">
+                  className="px-4 sm:px-6 border border-border text-text-muted hover:text-text py-3 rounded-xl font-medium transition-all disabled:opacity-50 text-sm sm:text-base">
                   Back
                 </button>
                 <button type="submit" disabled={loading}
-                  className="flex-1 bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                  className="flex-1 bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50 text-sm sm:text-base">
                   {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Create Account'}
                   {!loading && <ArrowRight className="w-4 h-4" />}
                 </button>

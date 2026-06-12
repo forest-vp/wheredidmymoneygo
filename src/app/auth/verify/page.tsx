@@ -1,307 +1,392 @@
 'use client'
 
-import { useState, useRef, useEffect, Suspense, useCallback } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
-import { TrendingDown, Mail, Shield, ArrowRight, Loader2 } from 'lucide-react'
+import { Suspense, useRef, useState, useEffect, useCallback } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase'
+import { Mail, ArrowLeft, Loader2, Check, AlertCircle } from 'lucide-react'
+import Link from 'next/link'
+
+type VerificationState = 'idle' | 'verifying' | 'success' | 'error'
 
 function VerifyContent() {
-  const router = useRouter()
   const searchParams = useSearchParams()
+  const router = useRouter()
   const email = searchParams.get('email') || ''
+  const type = searchParams.get('type') || 'signup'
 
-  const [code, setCode] = useState<string[]>(['', '', '', '', '', ''])
-  const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle')
-  const [errorMsg, setErrorMsg] = useState('')
+  const [code, setCode] = useState<string[]>(Array(6).fill(''))
+  const [state, setState] = useState<VerificationState>('idle')
+  const [shake, setShake] = useState(false)
   const [resendCooldown, setResendCooldown] = useState(0)
-  const [resendStatus, setResendStatus] = useState<'idle' | 'sent'>('idle')
+  const [resendSent, setResendSent] = useState(false)
+  const [resendLoading, setResendLoading] = useState(false)
+
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
+  // Initialize supabase client on mount
+  getSupabase()
+
+  // Focus first input on mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      inputRefs.current[0]?.focus()
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [])
+
+  // Shake animation reset
+  useEffect(() => {
+    if (shake) {
+      const timer = setTimeout(() => setShake(false), 600)
+      return () => clearTimeout(timer)
+    }
+  }, [shake])
 
   // Resend cooldown timer
   useEffect(() => {
     if (resendCooldown <= 0) return
-    const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000)
-    return () => clearTimeout(timer)
+    const interval = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(interval)
   }, [resendCooldown])
 
-  // Auto-focus first input on mount
-  useEffect(() => {
-    inputRefs.current[0]?.focus()
+  const triggerShake = useCallback(() => {
+    setShake(true)
   }, [])
 
-  const handleChange = useCallback((index: number, value: string) => {
-    // Only allow digits
-    const digit = value.replace(/\D/g, '').slice(-1)
-    if (!digit && value !== '') return
-
-    setCode(prev => {
+  const updateCodeAtIndex = useCallback((index: number, value: string) => {
+    setCode((prev) => {
       const next = [...prev]
-      next[index] = digit
+      next[index] = value
       return next
     })
+  }, [])
 
-    // Clear error when user types
-    if (status === 'error') {
-      setStatus('idle')
-      setErrorMsg('')
+  const handleVerify = useCallback(
+    async (fullCode: string) => {
+      if (fullCode.length !== 6 || !email) return
+
+      setState('verifying')
+
+      try {
+        const res = await fetch('/api/auth/verify-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, code: fullCode, type }),
+        })
+
+        const data = await res.json()
+
+        if (res.ok && data.success) {
+          setState('success')
+          // Redirect after success animation
+          await new Promise((r) => setTimeout(r, 1200))
+          if (type === 'signup') {
+            router.push('/onboarding')
+          } else {
+            router.push('/dashboard')
+          }
+        } else {
+          setState('error')
+          triggerShake()
+          setCode(Array(6).fill(''))
+          // Focus first input after error
+          setTimeout(() => inputRefs.current[0]?.focus(), 100)
+          // Reset error state after shake
+          setTimeout(() => setState('idle'), 2000)
+        }
+      } catch {
+        setState('error')
+        triggerShake()
+        setCode(Array(6).fill(''))
+        setTimeout(() => inputRefs.current[0]?.focus(), 100)
+        setTimeout(() => setState('idle'), 2000)
+      }
+    },
+    [email, type, router, triggerShake]
+  )
+
+  // Auto-submit when all 6 digits filled
+  useEffect(() => {
+    if (code.every((d) => d !== '') && state === 'idle') {
+      handleVerify(code.join(''))
     }
+  }, [code, state, handleVerify])
 
-    // Auto-focus next input
+  const handleInputChange = (index: number, value: string) => {
+    if (state === 'verifying' || state === 'success') return
+
+    // Only allow digits
+    const digit = value.replace(/\D/g, '')
+    if (!digit && value !== '') return
+
+    updateCodeAtIndex(index, digit.slice(-1))
+
+    // Auto-focus next box if digit entered
     if (digit && index < 5) {
       inputRefs.current[index + 1]?.focus()
     }
-  }, [status])
+  }
 
-  const handleKeyDown = useCallback((index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !code[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus()
-      setCode(prev => {
-        const next = [...prev]
-        next[index - 1] = ''
-        return next
-      })
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (state === 'verifying' || state === 'success') {
+      e.preventDefault()
+      return
     }
+
+    if (e.key === 'Backspace') {
+      e.preventDefault()
+      if (code[index]) {
+        // Clear current box
+        updateCodeAtIndex(index, '')
+      } else if (index > 0) {
+        // Move to previous and clear it
+        updateCodeAtIndex(index - 1, '')
+        inputRefs.current[index - 1]?.focus()
+      }
+      return
+    }
+
     if (e.key === 'ArrowLeft' && index > 0) {
+      e.preventDefault()
       inputRefs.current[index - 1]?.focus()
+      return
     }
+
     if (e.key === 'ArrowRight' && index < 5) {
+      e.preventDefault()
       inputRefs.current[index + 1]?.focus()
+      return
     }
-  }, [code])
 
-  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLInputElement>) => {
-    e.preventDefault()
+    if (e.key === 'Enter') {
+      const fullCode = code.join('')
+      if (fullCode.length === 6) {
+        handleVerify(fullCode)
+      }
+    }
+  }
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    if (state === 'verifying' || state === 'success') {
+      e.preventDefault()
+      return
+    }
+
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
-    if (!pasted) return
+    if (pasted.length === 0) return
 
-    const next = [...code]
-    for (let i = 0; i < 6; i++) {
-      next[i] = pasted[i] || ''
+    e.preventDefault()
+
+    const newCode = Array(6).fill('')
+    for (let i = 0; i < pasted.length; i++) {
+      newCode[i] = pasted[i]
     }
-    setCode(next)
+    setCode(newCode)
 
-    // Focus the last filled input or the next empty one
+    // Focus last filled box or next empty
     const focusIndex = Math.min(pasted.length, 5)
     inputRefs.current[focusIndex]?.focus()
 
-    // Clear error
-    if (status === 'error') {
-      setStatus('idle')
-      setErrorMsg('')
+    // Auto-submit if all 6 pasted
+    if (pasted.length === 6) {
+      handleVerify(pasted)
     }
-  }, [code, status])
-
-  const handleSubmit = useCallback(async () => {
-    const token = code.join('')
-    if (token.length !== 6 || !email) return
-
-    setStatus('submitting')
-    setErrorMsg('')
-
-    const supabase = getSupabase()
-    if (!supabase) {
-      setStatus('error')
-      setErrorMsg('Unable to connect. Please try again.')
-      return
-    }
-
-    const { error } = await supabase.auth.verifyOtp({
-      email,
-      token,
-      type: 'signup',
-    })
-
-    if (error) {
-      setStatus('error')
-      setErrorMsg('Invalid or expired code')
-      return
-    }
-
-    setStatus('success')
-    setTimeout(() => router.push('/onboarding'), 1500)
-  }, [code, email, router])
-
-  // Auto-submit when all 6 digits are entered
-  useEffect(() => {
-    if (code.every(d => d !== '') && status === 'idle') {
-      handleSubmit()
-    }
-  }, [code, status, handleSubmit])
-
-  const handleResend = async () => {
-    if (!email || resendCooldown > 0) return
-    const supabase = getSupabase()
-    if (!supabase) return
-
-    await supabase.auth.resend({ type: 'signup', email })
-    setResendStatus('sent')
-    setResendCooldown(60)
-    setTimeout(() => setResendStatus('idle'), 3000)
   }
 
-  // Format email for display (mask part of it)
-  const maskedEmail = email.replace(/(.{2})(.*)(@.+)/, (_, start, middle, end) =>
-    start + '*'.repeat(middle.length) + end
-  )
+  const handleResend = async () => {
+    if (resendCooldown > 0 || resendLoading || !email) return
+
+    setResendLoading(true)
+    try {
+      await fetch('/api/auth/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, type }),
+      })
+      setResendSent(true)
+      setResendCooldown(60)
+      setTimeout(() => setResendSent(false), 3000)
+    } catch {
+      // silently fail
+    } finally {
+      setResendLoading(false)
+    }
+  }
 
   return (
-    <div className="w-full max-w-md relative z-10">
-      {/* Logo / Header */}
-      <div className="text-center mb-8">
-        <Link href="/" className="inline-flex items-center gap-2 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <TrendingDown className="w-6 h-6 text-bg" />
-          </div>
-          <span className="text-2xl font-bold text-text">WDMG</span>
-        </Link>
+    <div className="min-h-screen bg-bg flex items-center justify-center px-4 py-12 relative overflow-hidden">
+      {/* Background decorations */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/5 rounded-full blur-3xl" />
       </div>
 
-      <div className="glass-card rounded-2xl p-8">
-        {/* Icon & Title */}
-        <div className="text-center mb-6">
-          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-            {status === 'success' ? (
-              <span className="text-3xl">✅</span>
-            ) : status === 'submitting' ? (
-              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Mail className="w-8 h-8 text-primary" />
-            )}
+      <div className="w-full max-w-md relative z-10">
+        {/* Card */}
+        <div className="glass-card rounded-2xl p-8 md:p-10 shadow-2xl shadow-black/20">
+          {/* Icon */}
+          <div className="flex justify-center mb-6">
+            <div
+              className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all duration-500 ${
+                state === 'success'
+                  ? 'bg-accent/20 shadow-lg shadow-accent/20'
+                  : state === 'error'
+                    ? 'bg-danger/20 shadow-lg shadow-danger/20'
+                    : 'bg-primary/20 shadow-lg shadow-primary/20'
+              }`}
+            >
+              {state === 'success' ? (
+                <Check className="w-8 h-8 text-accent" strokeWidth={2.5} />
+              ) : state === 'error' ? (
+                <AlertCircle className="w-8 h-8 text-danger" strokeWidth={2.5} />
+              ) : (
+                <Mail className="w-8 h-8 text-primary" strokeWidth={1.5} />
+              )}
+            </div>
           </div>
 
-          {status === 'success' ? (
+          {/* Title */}
+          <h1 className="text-2xl md:text-3xl font-bold text-text text-center mb-2">
+            {state === 'success' ? 'Email Verified!' : 'Check your email'}
+          </h1>
+
+          {/* Subtitle */}
+          <p className="text-text-muted text-center mb-2">
+            {state === 'success'
+              ? 'Redirecting you...'
+              : "We've sent a 6-digit code to"}
+          </p>
+
+          {/* Email display */}
+          {state !== 'success' && email && (
+            <p className="text-primary font-semibold text-center mb-8 truncate">
+              {email}
+            </p>
+          )}
+
+          {state === 'success' && (
+            <div className="flex justify-center mb-8">
+              <Loader2 className="w-6 h-6 text-accent animate-spin" />
+            </div>
+          )}
+
+          {/* Code input boxes */}
+          {state !== 'success' && (
             <>
-              <h1 className="text-2xl font-bold text-text mb-2">Email Verified!</h1>
-              <p className="text-text-muted">Redirecting you to onboarding...</p>
-              <div className="mt-4 flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 text-accent animate-spin" />
-                <span className="text-accent text-sm font-medium">Setting up your account</span>
+              <div
+                className={`flex gap-2 md:gap-3 justify-center mb-6 ${
+                  shake ? 'animate-[shake_0.5s_ease-in-out]' : ''
+                }`}
+              >
+                {code.map((digit, index) => (
+                  <input
+                    key={index}
+                    ref={(el) => {
+                      inputRefs.current[index] = el
+                    }}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleInputChange(index, e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(index, e)}
+                    onPaste={index === 0 ? handlePaste : undefined}
+                    disabled={state === 'verifying'}
+                    className={`w-11 h-14 md:w-12 md:h-15 text-center text-xl md:text-2xl font-bold rounded-xl border-2 outline-none
+                      transition-all duration-200 cursor-text
+                      ${
+                        state === 'error'
+                          ? 'border-danger/60 bg-danger/10 text-danger'
+                          : digit
+                            ? 'border-primary/60 bg-primary/10 text-primary'
+                            : 'border-border bg-bg-card text-text focus:border-primary/60 focus:bg-primary/5 focus:shadow-lg focus:shadow-primary/10'
+                      }
+                      ${state === 'verifying' ? 'opacity-60 cursor-not-allowed' : ''}
+                    `}
+                    style={{ caretColor: '#4F8CFF' }}
+                  />
+                ))}
               </div>
-            </>
-          ) : (
-            <>
-              <h1 className="text-2xl font-bold text-text mb-2">Check your email</h1>
-              <p className="text-text-muted text-sm">
-                We sent a 6-digit code to
-              </p>
-              <p className="text-primary font-medium text-sm mt-1">{maskedEmail}</p>
+
+              {/* Error message */}
+              {state === 'error' && (
+                <p className="text-danger text-sm text-center mb-4 font-medium animate-[fadeIn_0.3s_ease-in-out]">
+                  Invalid or expired code
+                </p>
+              )}
+
+              {/* Resend section */}
+              <div className="text-center mb-8">
+                <p className="text-text-dim text-sm mb-3">
+                  Didn&apos;t receive the code?
+                </p>
+                <button
+                  onClick={handleResend}
+                  disabled={resendCooldown > 0 || resendLoading || resendSent}
+                  className={`text-sm font-semibold px-5 py-2.5 rounded-lg transition-all duration-200
+                    ${resendCooldown > 0 || resendSent
+                      ? 'bg-accent/10 text-accent cursor-default'
+                      : 'bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer'
+                    }
+                    ${resendLoading ? 'opacity-60 cursor-wait' : ''}
+                  `}
+                >
+                  {resendSent
+                    ? '✓ Code sent!'
+                    : resendCooldown > 0
+                      ? `Resend code in ${resendCooldown}s`
+                      : resendLoading
+                        ? 'Sending...'
+                        : 'Resend code'}
+                </button>
+              </div>
+
+              {/* Back to login */}
+              <div className="text-center">
+                <Link
+                  href="/auth/login"
+                  className="inline-flex items-center gap-2 text-text-muted hover:text-text transition-colors text-sm group"
+                >
+                  <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                  Back to login
+                </Link>
+              </div>
             </>
           )}
         </div>
 
-        {/* Code Input */}
-        {status !== 'success' && (
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-text-muted mb-3 text-center">
-              Enter verification code
-            </label>
-            <div className="flex gap-2 justify-center">
-              {code.map((digit, i) => (
-                <input
-                  key={i}
-                  ref={el => { inputRefs.current[i] = el }}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={digit}
-                  onChange={e => handleChange(i, e.target.value)}
-                  onKeyDown={e => handleKeyDown(i, e)}
-                  onPaste={i === 0 ? handlePaste : undefined}
-                  disabled={status === 'submitting'}
-                  className={`
-                    w-12 h-14 text-center text-xl font-bold rounded-xl border-2
-                    bg-bg/50 text-text placeholder-text-dim
-                    focus:outline-none transition-all duration-200
-                    disabled:opacity-50 disabled:cursor-not-allowed
-                    ${status === 'error'
-                      ? 'border-danger/50 focus:border-danger animate-[shake_0.3s_ease-in-out]'
-                      : digit
-                        ? 'border-primary/50 focus:border-primary'
-                        : 'border-border focus:border-primary'
-                    }
-                  `}
-                  autoComplete="one-time-code"
-                />
-              ))}
-            </div>
-
-            {/* Error Message */}
-            {status === 'error' && (
-              <div className="mt-4 flex items-center justify-center gap-2">
-                <Shield className="w-4 h-4 text-danger" />
-                <p className="text-danger text-sm font-medium">{errorMsg}</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Actions */}
-        {status !== 'success' && (
-          <div className="text-center space-y-4">
-            {/* Resend Code */}
-            <div className="flex items-center justify-center gap-2">
-              <span className="text-text-dim text-sm">Didn&apos;t receive the code?</span>
-              {resendStatus === 'sent' ? (
-                <span className="text-accent text-sm font-medium">✓ Code sent!</span>
-              ) : resendCooldown > 0 ? (
-                <span className="text-text-dim text-sm">Resend in {resendCooldown}s</span>
-              ) : (
-                <button
-                  onClick={handleResend}
-                  className="text-primary hover:text-primary-hover text-sm font-medium transition-colors"
-                >
-                  Resend code
-                </button>
-              )}
-            </div>
-
-            {/* Back to Login */}
-            <div>
-              <Link
-                href="/login"
-                className="inline-flex items-center gap-1.5 text-text-muted hover:text-text text-sm transition-colors"
-              >
-                <ArrowRight className="w-3.5 h-3.5 rotate-180" />
-                Back to login
-              </Link>
-            </div>
-          </div>
+        {/* Footer hint */}
+        {state === 'idle' && (
+          <p className="text-text-dim text-xs text-center mt-6">
+            The code will expire in 10 minutes
+          </p>
         )}
       </div>
-
-      {/* Trust badge */}
-      <p className="text-center text-text-dim text-xs mt-6">
-        🔒 Your data is encrypted and secure
-      </p>
     </div>
   )
 }
 
-export default function AuthVerifyPage() {
+export default function VerifyPage() {
   return (
-    <div className="min-h-screen bg-bg flex items-center justify-center px-6">
-      {/* Background decorations */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/[0.02] rounded-full blur-3xl" />
-      </div>
-
-      <Suspense fallback={
-        <div className="w-full max-w-md relative z-10">
-          <div className="glass-card rounded-2xl p-8">
-            <div className="text-center">
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              </div>
-              <p className="text-text-muted text-sm">Loading...</p>
-            </div>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-bg flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            <p className="text-text-muted text-sm">Loading...</p>
           </div>
         </div>
-      }>
-        <VerifyContent />
-      </Suspense>
-    </div>
+      }
+    >
+      <VerifyContent />
+    </Suspense>
   )
 }

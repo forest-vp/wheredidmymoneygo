@@ -92,3 +92,16 @@ body {
 .section-gradient {
   background: radial-gradient(ellipse at 50% 50%, rgba(0, 229, 168, 0.05) 0%, transparent 70%);
 }
+
+/* Shake animation for error feedback */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+/* Fade in */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
