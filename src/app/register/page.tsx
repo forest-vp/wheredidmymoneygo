@@ -43,7 +43,7 @@ export default function RegisterPage() {
     const supabase = getSupabase()
     if (!supabase) { setError('Unable to connect. Please try again.'); setLoading(false); return }
 
-    // Create user via client-side signUp (auto-creates session + no admin needed)
+    // Create user via client-side signUp (auto-creates session)
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -60,6 +60,14 @@ export default function RegisterPage() {
       }
       setLoading(false)
       return
+    }
+
+    // Ensure session is set by signing in explicitly
+    // This fixes issues where Vercel Edge doesn't persist the session from signUp
+    try {
+      await supabase.auth.signInWithPassword({ email, password })
+    } catch {
+      // If sign-in fails, the session from signUp might still work
     }
 
     // Save email for display
