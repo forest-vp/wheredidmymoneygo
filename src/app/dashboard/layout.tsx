@@ -117,6 +117,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 Upgrade to Pro →
               </Link>
             )}
+            <Link href="/admin" className="block mt-2 text-xs text-text-dim hover:text-text font-medium transition-colors">
+              ⚙️ Admin
+            </Link>
           </div>
           <button onClick={handleLogout}
             className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-text-muted hover:text-danger hover:bg-danger/10 w-full transition-all">
