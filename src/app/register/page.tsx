@@ -80,8 +80,10 @@ export default function RegisterPage() {
     if (data?.session) {
       router.push('/onboarding')
     } else {
-      // Email confirmation required — show message
-      setError('Please check your email for a confirmation link, then sign in.')
+      // Email confirmation required — show success screen
+      setLoading(false)
+      // Redirect to a "check email" view
+      router.push(`/auth/verify?email=${encodeURIComponent(email)}`)
     }
     setLoading(false)
   }

@@ -1,11 +1,24 @@
-// TEMP: Email confirmation is disabled in Supabase
-// This route handles the callback but since we auto-confirm, users are already logged in
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const siteUrl = process.env.NEXT_PUBLIC_URL || requestUrl.origin
 
-  // Just redirect to login — users auto-login after signup
-  return NextResponse.redirect(`${siteUrl}/onboarding`)
+  const code = requestUrl.searchParams.get('code')
+  const error = requestUrl.searchParams.get('error')
+  const errorDescription = requestUrl.searchParams.get('error_description')
+
+  if (error) {
+    return NextResponse.redirect(
+      `${siteUrl}/auth/verify?error=${encodeURIComponent(errorDescription || error)}`
+    )
+  }
+
+  if (code) {
+    // Redirect to the verify page with the code — client-side Supabase SDK will exchange it
+    return NextResponse.redirect(`${siteUrl}/auth/verify?code=${encodeURIComponent(code)}`)
+  }
+
+  // No code and no error — redirect to login
+  return NextResponse.redirect(`${siteUrl}/login`)
 }
