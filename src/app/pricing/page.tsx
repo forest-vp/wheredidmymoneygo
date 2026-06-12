@@ -1,19 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import {
-  Check,
-  Star,
-  Flame,
-  ChevronRight,
-  TrendingDown,
-  ArrowRight,
-  Sparkles,
-  Loader2,
-  Lock,
-  Zap,
-} from 'lucide-react'
+import { Check, Star, Flame, ChevronRight, TrendingDown, ArrowRight, ArrowLeft, Sparkles, Loader2, Lock, Zap } from 'lucide-react'
+import { getSupabase } from '@/lib/supabase'
 
 const plans = [
   {
@@ -87,6 +77,16 @@ const plans = [
 
 export default function PricingPage() {
   const [loading, setLoading] = useState<string | null>(null)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+
+  useEffect(() => {
+    const supabase = getSupabase()
+    if (supabase) {
+      supabase.auth.getUser().then(({ data }) => {
+        setIsLoggedIn(!!data?.user)
+      }).catch(() => {})
+    }
+  }, [])
 
   const handleUpgrade = async (plan: string) => {
     if (plan === 'free') {
@@ -133,13 +133,16 @@ export default function PricingPage() {
             <span className="text-xl font-bold">WDMG</span>
           </Link>
           <div className="flex items-center gap-4">
-            <Link href="/login" className="text-text-muted hover:text-text transition-colors px-4 py-2">
-              Log in
-            </Link>
-            <Link href="/register"
-              className="bg-primary hover:bg-primary-hover text-white px-5 py-2.5 rounded-xl font-medium transition-all hover:shadow-lg hover:shadow-primary/25">
-              Start Free
-            </Link>
+            {isLoggedIn ? (
+              <Link href="/dashboard" className="text-text-muted hover:text-text transition-colors px-4 py-2 flex items-center gap-1.5">
+                <ArrowLeft className="w-4 h-4" /> Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link href="/login" className="text-text-muted hover:text-text transition-colors px-4 py-2">Log in</Link>
+                <Link href="/register" className="bg-primary hover:bg-primary-hover text-white px-5 py-2.5 rounded-xl font-medium transition-all hover:shadow-lg hover:shadow-primary/25">Start Free</Link>
+              </>
+            )}
           </div>
         </div>
       </nav>
