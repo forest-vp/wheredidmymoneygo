@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { TrendingDown, Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, Loader2, User, Calendar, Globe } from 'lucide-react'
-import { getSupabase, hasSupabase } from '@/lib/supabase'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -42,66 +41,27 @@ export default function RegisterPage() {
 
     setLoading(true)
 
-    if (!hasSupabase()) {
-      setError('Supabase is not configured yet.')
-      setLoading(false)
-      return
-    }
-
-    const supabase = getSupabase()
-    if (!supabase) { setError('Unable to connect. Please try again.'); setLoading(false); return }
-
-    // Step 1: Create the user via Supabase signUp (email confirmation OFF = instant account)
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName },
-        emailRedirectTo: undefined,
-      },
-    })
-
-    if (signUpError) {
-      if (signUpError.message.includes('already registered')) {
-        setError('This email is already registered. Try signing in instead.')
-      } else {
-        setError(signUpError.message)
-      }
-      setLoading(false)
-      return
-    }
-
-    // Step 2: Save email for dashboard
-    localStorage.setItem('wdmg_user_email', email)
-
-    // Step 3: Update profile with extra info
-    if (signUpData?.user) {
-      await supabase.from('profiles').update({
-        full_name: fullName,
-        birth_date: birthDate,
-        country,
-      }).eq('id', signUpData.user.id)
-    }
-
-    // Step 4: Send verification email via Supabase admin API
-    // This calls our server-side API which uses the service role key
+    // Create user via server-side API (uses Supabase admin = NO rate limits)
     try {
-      const res = await fetch('/api/auth/send-code', {
+      const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, type: 'signup' }),
+        body: JSON.stringify({ email, password, fullName, birthDate, country }),
       })
       const data = await res.json()
-      
-      if (!data.success) {
-        console.warn('Send code failed:', data.error)
-        // Non-blocking — user can still verify later
+
+      if (!res.ok) {
+        setError(data.error || 'Failed to create account. Please try again.')
+        setLoading(false)
+        return
       }
     } catch {
-      // Non-blocking
+      setError('Unable to connect. Please try again.')
+      setLoading(false)
+      return
     }
 
-    // Step 5: Show success — user must check email and click the link
+    localStorage.setItem('wdmg_user_email', email)
     setSuccess(true)
     setLoading(false)
   }
@@ -119,25 +79,20 @@ export default function RegisterPage() {
               <Mail className="w-8 h-8 text-primary" />
             </div>
             <h1 className="text-2xl font-bold mb-2">Check your email</h1>
-            <p className="text-text-muted text-sm mb-2">
-              We sent a verification link to
-            </p>
-            <p className="text-primary font-medium mb-4">{email}</p>
+            <p className="text-text-muted text-sm mb-2">We sent a verification link to</p>
+            <p className="text-primary font-medium mb-4 break-all">{email}</p>
             <p className="text-text-dim text-sm mb-6">
               Click the link in the email to verify your account and start your onboarding.
             </p>
             <div className="bg-bg rounded-xl p-4 text-left text-sm text-text-muted mb-6">
-              <p className="font-medium text-text mb-2">Didn&apos;t receive the email?</p>
+              <p className="font-medium text-text mb-2">Didn&apos;t receive it?</p>
               <ul className="space-y-1 text-xs">
                 <li>• Check your spam/junk folder</li>
-                <li>• Make sure <span className="text-text">{email}</span> is correct</li>
-                <li>• Wait a few minutes and try again</li>
+                <li>• Wait a few minutes for delivery</li>
               </ul>
             </div>
-            <Link href="/login"
-              className="inline-flex items-center gap-2 text-text-muted hover:text-text transition-colors text-sm">
-              <ArrowLeft className="w-4 h-4" />
-              Back to login
+            <Link href="/login" className="inline-flex items-center gap-2 text-text-muted hover:text-text text-sm">
+              <ArrowLeft className="w-4 h-4" /> Back to login
             </Link>
           </div>
         </div>
@@ -145,7 +100,7 @@ export default function RegisterPage() {
     )
   }
 
-  const COUNTRIES = ['Albania', 'Argentina', 'Australia', 'Austria', 'Belgium', 'Brazil', 'Bulgaria', 'Canada', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Egypt', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'India', 'Indonesia', 'Ireland', 'Italy', 'Japan', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Mexico', 'Netherlands', 'Norway', 'Poland', 'Portugal', 'Romania', 'Serbia', 'Singapore', 'Slovakia', 'Slovenia', 'South Africa', 'South Korea', 'Spain', 'Sweden', 'Switzerland', 'Thailand', 'Turkey', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'United States', 'Vietnam'].sort()
+  const COUNTRIES = ['Albania','Argentina','Australia','Austria','Belgium','Brazil','Bulgaria','Canada','Croatia','Cyprus','Czech Republic','Denmark','Egypt','Estonia','Finland','France','Germany','Greece','Hungary','India','Indonesia','Ireland','Italy','Japan','Latvia','Lithuania','Luxembourg','Malta','Mexico','Netherlands','Norway','Poland','Portugal','Romania','Serbia','Singapore','Slovakia','Slovenia','South Africa','South Korea','Spain','Sweden','Switzerland','Thailand','Turkey','Ukraine','United Arab Emirates','United Kingdom','United States','Vietnam'].sort()
 
   return (
     <div className="min-h-screen bg-bg flex items-center justify-center px-4 sm:px-6 py-8">
@@ -156,25 +111,19 @@ export default function RegisterPage() {
       <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-6 sm:mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-4 sm:mb-6">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-              <TrendingDown className="w-6 h-6 text-bg" />
-            </div>
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center"><TrendingDown className="w-6 h-6 text-bg" /></div>
             <span className="text-2xl font-bold">WDMG</span>
           </Link>
           <h1 className="text-xl sm:text-2xl font-bold mb-2">Create your account</h1>
           <p className="text-text-muted text-sm">{fullStep === 3 ? 'Set your password' : `Step ${fullStep} of 3`}</p>
           <div className="flex gap-2 justify-center mt-4">
-            {[1, 2, 3].map(s => (
-              <div key={s} className={`h-2 rounded-full transition-all ${s <= fullStep ? 'w-8 bg-primary' : 'w-2 bg-border'}`} />
-            ))}
+            {[1,2,3].map(s => <div key={s} className={`h-2 rounded-full transition-all ${s <= fullStep ? 'w-8 bg-primary' : 'w-2 bg-border'}`} />)}
           </div>
         </div>
 
         <div className="glass-card rounded-2xl p-6 sm:p-8">
           {error && (
-            <div className="bg-danger/10 border border-danger/20 rounded-xl p-3 text-danger text-sm mb-5">
-              {error}
-            </div>
+            <div className="bg-danger/10 border border-danger/20 rounded-xl p-3 text-danger text-sm mb-5">{error}</div>
           )}
 
           {fullStep === 1 && (
@@ -183,22 +132,17 @@ export default function RegisterPage() {
                 <label className="block text-sm font-medium text-text-muted mb-2">Full Name</label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
-                  <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)}
-                    className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors"
-                    placeholder="John Doe" required autoFocus />
+                  <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors" placeholder="John Doe" required autoFocus />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-text-muted mb-2">Email Address</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
-                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors"
-                    placeholder="you@example.com" required />
+                  <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors" placeholder="you@example.com" required />
                 </div>
               </div>
-              <button type="button" onClick={handleNext}
-                className="w-full bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2">
+              <button type="button" onClick={handleNext} className="w-full bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2">
                 Continue <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -210,44 +154,23 @@ export default function RegisterPage() {
                 <label className="block text-sm font-medium text-text-muted mb-2">Birth Date</label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim pointer-events-none" />
-                  <input
-                    type="date"
-                    value={birthDate}
-                    onChange={(e) => setBirthDate(e.target.value)}
-                    max={new Date().toISOString().split('T')[0]}
-                    min="1920-01-01"
-                    className="w-full bg-bg border border-border rounded-xl pl-12 pr-4 py-3 text-text focus:outline-none focus:border-primary transition-colors text-base"
-                    style={{ colorScheme: 'dark' }}
-                    required
-                    autoFocus
-                  />
+                  <input type="date" value={birthDate} onChange={e => setBirthDate(e.target.value)} max={new Date().toISOString().split('T')[0]} min="1920-01-01" className="w-full bg-bg border border-border rounded-xl pl-12 pr-4 py-3 text-text focus:outline-none focus:border-primary transition-colors text-base" style={{ colorScheme: 'dark' }} required autoFocus />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-text-muted mb-2">Country</label>
                 <div className="relative">
                   <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim pointer-events-none" />
-                  <select value={country} onChange={(e) => setCountry(e.target.value)}
-                    className="w-full bg-bg border border-border rounded-xl pl-12 pr-10 py-3 text-text appearance-none focus:outline-none focus:border-primary transition-colors cursor-pointer text-base" required>
+                  <select value={country} onChange={e => setCountry(e.target.value)} className="w-full bg-bg border border-border rounded-xl pl-12 pr-10 py-3 text-text appearance-none focus:outline-none focus:border-primary transition-colors cursor-pointer text-base" required>
                     <option value="">Select your country</option>
                     {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                    <svg className="w-4 h-4 text-text-dim" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"><svg className="w-4 h-4 text-text-dim" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg></div>
                 </div>
               </div>
               <div className="flex gap-3">
-                <button type="button" onClick={() => setFullStep(1)}
-                  className="px-4 sm:px-6 border border-border text-text-muted hover:text-text py-3 rounded-xl font-medium transition-all text-sm sm:text-base">
-                  Back
-                </button>
-                <button type="button" onClick={handleNext}
-                  className="flex-1 bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 text-sm sm:text-base">
-                  Continue <ArrowRight className="w-4 h-4" />
-                </button>
+                <button type="button" onClick={() => setFullStep(1)} className="px-4 sm:px-6 border border-border text-text-muted hover:text-text py-3 rounded-xl font-medium transition-all text-sm sm:text-base">Back</button>
+                <button type="button" onClick={handleNext} className="flex-1 bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 text-sm sm:text-base">Continue <ArrowRight className="w-4 h-4" /></button>
               </div>
             </div>
           )}
@@ -258,11 +181,8 @@ export default function RegisterPage() {
                 <label className="block text-sm font-medium text-text-muted mb-2">Password (min 8 characters)</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
-                  <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-bg border border-border rounded-xl pl-11 pr-11 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors"
-                    placeholder="Min 8 characters" required minLength={8} autoFocus />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text">
+                  <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-bg border border-border rounded-xl pl-11 pr-11 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors" placeholder="Min 8 characters" required minLength={8} autoFocus />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text">
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
@@ -271,25 +191,17 @@ export default function RegisterPage() {
                 <label className="block text-sm font-medium text-text-muted mb-2">Confirm Password</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-dim" />
-                  <input type={showPassword ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors"
-                    placeholder="Repeat password" required minLength={8} />
+                  <input type={showPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full bg-bg border border-border rounded-xl pl-11 pr-4 py-3 text-text placeholder-text-dim focus:outline-none focus:border-primary transition-colors" placeholder="Repeat password" required minLength={8} />
                 </div>
               </div>
               <div className="flex gap-3">
-                <button type="button" onClick={() => setFullStep(2)} disabled={loading}
-                  className="px-4 sm:px-6 border border-border text-text-muted hover:text-text py-3 rounded-xl font-medium transition-all disabled:opacity-50 text-sm sm:text-base">
-                  Back
-                </button>
-                <button type="submit" disabled={loading}
-                  className="flex-1 bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50 text-sm sm:text-base">
+                <button type="button" onClick={() => setFullStep(2)} disabled={loading} className="px-4 sm:px-6 border border-border text-text-muted hover:text-text py-3 rounded-xl font-medium transition-all disabled:opacity-50 text-sm sm:text-base">Back</button>
+                <button type="submit" disabled={loading} className="flex-1 bg-primary hover:bg-primary-hover text-white py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50 text-sm sm:text-base">
                   {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Create Account'}
                   {!loading && <ArrowRight className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="text-xs text-text-dim text-center">
-                By signing up, you agree to our Terms of Service and Privacy Policy.
-              </p>
+              <p className="text-xs text-text-dim text-center">By signing up, you agree to our Terms of Service and Privacy Policy.</p>
             </form>
           )}
 

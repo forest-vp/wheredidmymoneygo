@@ -18,7 +18,6 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Use service role key for admin access (no rate limits, can send emails)
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
@@ -29,14 +28,14 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Dynamic import to avoid Edge runtime issues
     const { createClient } = await import('@supabase/supabase-js')
     const supabase = createClient(supabaseUrl, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     })
 
-    // Use Supabase admin API to generate a magic link
+    // Generate a magic link using Supabase admin API
     // This sends a REAL email via Supabase's email system
+    // Admin API has NO rate limits
     const { data, error } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email,

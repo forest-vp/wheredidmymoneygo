@@ -38,27 +38,15 @@ function LoginContent() {
       return
     }
 
-    // Check if email is verified and onboarding is complete
+    // Check if onboarding is complete
+    // Note: Email is auto-confirmed via admin API, so no need to check email_verified
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('onboarding_complete, email_verified')
+        .select('onboarding_complete')
         .eq('id', user.id)
         .single()
-
-      if (!profile?.email_verified) {
-        // Send verification code and redirect to verify
-        try {
-          await fetch('/api/auth/send-code', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: user.email, type: 'signup' }),
-          })
-        } catch { /* non-blocking */ }
-        router.push(`/auth/verify?email=${encodeURIComponent(user.email || email)}&type=signup`)
-        return
-      }
 
       if (profile?.onboarding_complete) {
         router.push('/dashboard')
