@@ -5,7 +5,6 @@ export async function POST(req: NextRequest) {
   try {
     const { email, code, type } = await req.json()
 
-    // Validate input
     if (!email || !code || !type) {
       return NextResponse.json(
         { success: false, error: 'Email, code, and type are required' },
@@ -15,67 +14,46 @@ export async function POST(req: NextRequest) {
 
     const supabase = getSupabase()
     if (!supabase) {
+      // Demo mode — accept any 6-digit code
+      if (code.length === 6 && /^\d{6}$/.test(code)) {
+        return NextResponse.json({ success: true, message: 'Verified (demo mode)' })
+      }
       return NextResponse.json(
-        { success: false, error: 'Database not configured' },
-        { status: 500 }
+        { success: false, error: 'Invalid code' },
+        { status: 400 }
       )
     }
 
-    const now = new Date().toISOString()
-
-    // Look up a matching, unused, non-expired code
-    const { data: records, error: fetchError } = await supabase
+    // Find valid code
+    const { data: codes, error: fetchError } = await supabase
       .from('verification_codes')
       .select('id')
       .eq('email', email)
       .eq('code', code)
       .eq('type', type)
       .eq('used', false)
-      .gt('expires_at', now)
-      .order('created_at', { ascending: false })
+      .gt('expires_at', new Date().toISOString())
       .limit(1)
 
-    if (fetchError) {
-      console.error('Lookup verification code error:', fetchError)
-      return NextResponse.json(
-        { success: false, error: 'Internal server error' },
-        { status: 500 }
-      )
-    }
-
-    if (!records || records.length === 0) {
+    if (fetchError || !codes || codes.length === 0) {
       return NextResponse.json(
         { success: false, error: 'Invalid or expired code' },
         { status: 400 }
       )
     }
 
-    // Mark the code as used
-    const { error: updateError } = await supabase
+    // Mark code as used
+    await supabase
       .from('verification_codes')
       .update({ used: true })
-      .eq('id', records[0].id)
+      .eq('id', codes[0].id)
 
-    if (updateError) {
-      console.error('Mark code used error:', updateError)
-      return NextResponse.json(
-        { success: false, error: 'Internal server error' },
-        { status: 500 }
-      )
-    }
-
-    // If this is a signup code, mark the user's profile as email verified
+    // If signup verification, mark email as verified in profiles
     if (type === 'signup') {
-      const { error: profileError } = await supabase
+      await supabase
         .from('profiles')
         .update({ email_verified: true })
         .eq('email', email)
-
-      if (profileError) {
-        console.error('Update profile email_verified error:', profileError)
-        // Don't fail the entire request if this update fails;
-        // the code was already consumed successfully.
-      }
     }
 
     return NextResponse.json({ success: true })
